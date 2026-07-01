@@ -47,7 +47,7 @@ Once registered:
 
 # Step 2 — install deep-goal from the marketplace
 # Claude Code
-/plugin install deep-goal@Sungmin-Cho-claude-deep-suite
+/plugin install deep-goal@claude-deep-suite
 
 # Codex — marketplace mirror available after deep-suite push
 $deep-goal:deep-goal

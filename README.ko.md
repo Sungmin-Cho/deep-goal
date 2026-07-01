@@ -46,7 +46,7 @@ clone 즉시 동작합니다. 마켓플레이스 등록 여부와 무관합니�
 
 # 2단계 — 마켓플레이스에서 deep-goal 설치
 # Claude Code
-/plugin install deep-goal@Sungmin-Cho-claude-deep-suite
+/plugin install deep-goal@claude-deep-suite
 
 # Codex — deep-suite push 완료 후 마켓플레이스 미러 이용 가능
 $deep-goal:deep-goal
