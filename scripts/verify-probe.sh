@@ -39,10 +39,9 @@ trap '[ -n "$work" ] && rm -rf "$work"; [ -n "$gitwork" ] && rm -rf "$gitwork"' 
   case "$(detect_proof_command)" in *none*parse-error*) : ;; *) exit 9; esac ) \
   && ok "probe: invalid package.json → unconfirmed none parse-error (fail-loud)" \
   || bad "probe: invalid package.json fail-loud (not fail-open npm test)"
-# R1 Fix 2 — node 실행 불가(PATH 제거) → parser-unavailable (fail-open npm test 금지)
+# R1 Fix 2 — node 실행 불가(PATH 무효화 프리픽스) → parser-unavailable (fail-open npm test 금지)
 ( cd "$work" && printf '{"name":"x","scripts":{"test":"jest"}}' > package.json
-  PATH=/nonexistent
-  case "$(detect_proof_command 2>/dev/null)" in *none*parser-unavailable*) : ;; *) exit 9; esac ) \
+  case "$(PATH=/nonexistent detect_proof_command 2>/dev/null)" in *none*parser-unavailable*) : ;; *) exit 9; esac ) \
   && ok "probe: node unavailable → parser-unavailable (R1 Fix 2, no fail-open)" \
   || bad "probe: node-absent fail-loud (R1 Fix 2, not fail-open npm test)"
 
