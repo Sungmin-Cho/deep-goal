@@ -61,10 +61,18 @@ gitwork="$(mktemp -d "${TMPDIR:-/tmp}/deep-goal-git.XXXXXX")"
   case "$(classify_proof_line "$unrel" '' "$base")" in unconfirmed-artifact) : ;; *) exit 9; esac
 ) && ok "classify: SHA objective iff baseline strict descendant (Fix 9b)" || bad "classify: baseline-descendant binding (Fix 9b)"
 rm -rf "$gitwork"; gitwork=""
-# (Fix 9a positive) 파일 + 실제 sha256 일치 → objective
-( cd "$work" && printf 'content-x' > out.txt; h="$(_sha256 out.txt)"
-  case "$(classify_proof_line "out.txt sha256:$h 일치" '')" in objective-artifact) : ;; *) exit 9; esac ) \
-  && ok "classify: file + matching sha256 → objective-artifact (Fix 9a)" || bad "classify: real-digest match (Fix 9a)"
+# (R1 Fix 1 + Fix 9a) 파일+digest freshness 바인딩: baseline 후손 Add 파일만 objective.
+gitwork="$(mktemp -d "${TMPDIR:-/tmp}/deep-goal-fgit.XXXXXX")"
+( cd "$gitwork" && git init -q && git config user.email t@t && git config user.name t
+  printf 'old-preexisting' > pre.txt; git add pre.txt; git commit -q -m c1; base="$(git rev-parse HEAD)"
+  printf 'new-artifact' > out.txt; git add out.txt; git commit -q -m c2
+  ho="$(_sha256 out.txt)"; hp="$(_sha256 pre.txt)"
+  # positive: baseline 후손 커밋에서 Add + 실해시 일치 → objective
+  case "$(classify_proof_line "out.txt sha256:$ho" '' "$base")" in objective-artifact) : ;; *) exit 9; esac
+  # negative(R1 Fix 1): baseline 자신에 있던 선재 파일 + 실해시 → unconfirmed(stale, ready-to-run 금지)
+  case "$(classify_proof_line "pre.txt sha256:$hp" '' "$base")" in unconfirmed-artifact) : ;; *) exit 9; esac
+) && ok "classify: file+digest objective iff baseline-descendant Add (R1 Fix 1)" || bad "classify: file freshness binding (R1 Fix 1)"
+rm -rf "$gitwork"; gitwork=""
 # (Fix 9a negative) 파일 + 불일치/가짜 digest → unconfirmed (R3 구멍: 빈파일+가짜해시 통과 차단)
 ( cd "$work" && printf 'content-x' > out.txt
   zero64="0000000000000000000000000000000000000000000000000000000000000000"

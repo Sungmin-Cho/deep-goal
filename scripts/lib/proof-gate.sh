@@ -53,13 +53,21 @@ classify_proof_line() {
     fi
     printf 'unconfirmed-artifact\n'; return 0      # baseline 자신/조상/무관 브랜치 → stale
   fi
-  # (2b) 파일 + 선언 digest 실제 계산·대조(plan-R4 Fix 9a). sha256:<64hex> 만 인정.
+  # (2b) 파일 + 선언 digest 실제 계산·대조(plan-R4 Fix 9a) + baseline freshness 바인딩(R1 Fix 1).
   if [ -e "$tok" ]; then
     decl="$(printf '%s' "$text" | grep -oE 'sha256:[0-9a-fA-F]{64}' | head -1)"
     if [ -n "$decl" ]; then
       want="$(printf '%s' "${decl#sha256:}" | tr 'A-F' 'a-f')"
       got="$(_sha256 "$tok")"
-      [ -n "$got" ] && [ "$got" = "$want" ] && { printf 'objective-artifact\n'; return 0; }  # digest 일치
+      if [ -n "$got" ] && [ "$got" = "$want" ]; then
+        # digest 일치 — stale 방지(R1 Fix 1): baseline 후손 커밋에서 Add/Modify 된 파일만 objective.
+        # 선재/미추적 파일은 현재 해시가 맞아도 현재-작업 산출물 증명이 아님(SHA baseline 가드와 대칭).
+        [ -z "$base" ] && base="$(git rev-parse HEAD 2>/dev/null)"
+        if [ -n "$base" ] && [ -n "$(git log --diff-filter=AM "$base"..HEAD -- "$tok" 2>/dev/null)" ]; then
+          printf 'objective-artifact\n'; return 0
+        fi
+        printf 'unconfirmed-artifact\n'; return 0   # 선재/미추적 파일+현재 해시만 → stale 가능
+      fi
       printf 'unconfirmed-artifact\n'; return 0    # digest 불일치/계산 불가
     fi
     printf 'unconfirmed-artifact\n'; return 0       # bare 선재 파일(해시 없음) → 검증 필요
