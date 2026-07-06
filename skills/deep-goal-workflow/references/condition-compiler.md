@@ -95,9 +95,9 @@ or stop after 40 turns.
 | 클래스 | 판정 근거(classify) | 렌더링(render) |
 |---|---|---|
 | `confirmed-command` | 실행형 커맨드 shape **AND** probe=confirmed **AND 감지 커맨드와 일치**(R2 Fix 4 — 임의 커맨드 ready 금지) | 그대로 (ready-to-run) |
-| `objective-artifact` | **BASELINE_HEAD의 strict 후손 commit SHA**(goal 중 새 커밋) 또는 **선언 digest가 실제 계산과 일치하고 baseline 후손 커밋에서 Add/Modify 된 파일**(plan-R4 Fix 9 + R1 Fix 1 freshness) | 그대로 (ready-to-run) |
+| `objective-artifact` | **BASELINE_HEAD..HEAD 구간의 commit SHA**(strict 후손 AND 현재 HEAD 도달 — plan-R4 Fix 9b + R2 Fix 5) 또는 **선언 digest가 실제 계산과 일치하고 baseline 후손 커밋에서 Add/Modify 된 파일**(plan-R4 Fix 9 + R1 Fix 1 freshness) | 그대로 (ready-to-run) |
 | `unconfirmed-command` | 실행형 커맨드 shape **AND** (probe≠confirmed **또는 감지 커맨드 불일치** — `npm publish`·`make deploy` 등) | ⚠️ 미검증 + 실행 전 존재 확인 |
-| `unconfirmed-artifact` | **일반 URL** · **bare 선재 파일** · **digest 불일치 파일** · **선재/미추적 파일+해시**(baseline 후손 아님 — R1 Fix 1) · **baseline 자신/조상/무관 브랜치 SHA**(plan-R4 Fix 9 — 실측 없이 ready 금지) | ⚠️ 미검증 + 신선도/현재-작업 바인딩 확인 |
+| `unconfirmed-artifact` | **일반 URL** · **bare 선재 파일** · **digest 불일치 파일** · **선재/미추적 파일+해시**(baseline 후손 아님 — R1 Fix 1) · **baseline 자신/조상/HEAD 미도달 side-branch/무관 브랜치 SHA**(plan-R4 Fix 9 + R2 Fix 5 — 실측 없이 ready 금지) | ⚠️ 미검증 + 신선도/현재-작업 바인딩 확인 |
 | `subjective-placeholder` | "수동 확인"·"완료되면" 등 실행 불가 산문, 또는 미분류(안전 수렴) | **절대 ready-to-run 금지** + 재구성 유도 |
 
 ```bash
@@ -121,15 +121,18 @@ classify_proof_line() {
       printf 'subjective-placeholder\n'; return 0 ;;
   esac
   tok="${text%% *}"
-  # (2a) commit SHA — baseline 의 strict 후손만 objective(plan-R4 Fix 9b: 현재-task 연결 증명).
+  # (2a) commit SHA — baseline..HEAD 구간만 objective(plan-R4 Fix 9b + R2 Fix 5: 현재-task 연결 증명).
   if printf '%s' "$tok" | grep -qE '^[0-9a-f]{7,40}$' && git rev-parse --verify -q "${tok}^{commit}" >/dev/null 2>&1; then
     [ -z "$base" ] && base="$(git rev-parse HEAD 2>/dev/null)"
     full="$(git rev-parse --verify -q "${tok}^{commit}" 2>/dev/null)"
     bfull="$(git rev-parse --verify -q "${base}^{commit}" 2>/dev/null)"
-    if [ -n "$bfull" ] && [ "$full" != "$bfull" ] && git merge-base --is-ancestor "$bfull" "$full" 2>/dev/null; then
-      printf 'objective-artifact\n'; return 0     # baseline 의 strict 후손 = goal 중 생성된 새 커밋
+    # baseline 의 strict 후손(현재-task) AND 현재 HEAD 도달 가능(옆 브랜치 배제, R2 Fix 5) = baseline..HEAD.
+    if [ -n "$bfull" ] && [ "$full" != "$bfull" ] \
+       && git merge-base --is-ancestor "$bfull" "$full" 2>/dev/null \
+       && git merge-base --is-ancestor "$full" HEAD 2>/dev/null; then
+      printf 'objective-artifact\n'; return 0     # baseline..HEAD = 현재 라인에 생성된 새 커밋
     fi
-    printf 'unconfirmed-artifact\n'; return 0      # baseline 자신/조상/무관 브랜치 → stale
+    printf 'unconfirmed-artifact\n'; return 0      # baseline 자신/조상/HEAD 미도달 side-branch/무관 → stale
   fi
   # (2b) 파일 + 선언 digest 실제 계산·대조(plan-R4 Fix 9a) + baseline freshness 바인딩(R1 Fix 1).
   if [ -e "$tok" ]; then

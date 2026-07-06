@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Freshness-bound file artifacts (review hardening)** — a file + matching `sha256:` digest is `objective-artifact` only when the file was Added/Modified in a baseline-descendant commit (`git log --diff-filter=AM $BASELINE_HEAD..HEAD`); a pre-existing/untracked file with a correct current hash is `unconfirmed-artifact` (stale-artifact guard, symmetric with the commit-SHA baseline rule).
 - **Full fail-loud probe (review hardening)** — every non-zero `node` exit is surfaced: `rc=3` → `parse-error`, any other (node absent / crash) → `parser-unavailable`; the probe never falls back to a guessed `npm test`.
 - **Restore-safe self-test (review hardening)** — the no-eval-guard self-test injects a temporary fixture via `DEEP_GOAL_PROBE_SCRIPT` instead of overwriting the tracked `verify-probe.sh`, so an interrupted run can't corrupt the repo.
+- **Detected-command binding (review hardening)** — `confirmed-command` requires the proof text to match the *detected* command (probe=confirmed is necessary but not sufficient); an arbitrary command-shape like `npm publish` / `make deploy` is `unconfirmed-command`, never rendered ready-to-run.
+- **HEAD-reachable commit SHA (review hardening)** — a commit SHA is `objective-artifact` only when it lies in `BASELINE_HEAD..HEAD` (strict baseline descendant **and** reachable from the current HEAD); a side-branch commit that descends from baseline but isn't on the current line is `unconfirmed-artifact`.
 
 ---
 

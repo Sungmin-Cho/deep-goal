@@ -27,6 +27,8 @@
 - **파일 아티팩트 freshness 바인딩 (리뷰 하드닝)** — 파일 + 일치하는 `sha256:` digest는 그 파일이 baseline 후손 커밋에서 Add/Modify 된 경우(`git log --diff-filter=AM $BASELINE_HEAD..HEAD`)에만 `objective-artifact`; 선재/미추적 파일은 현재 해시가 맞아도 `unconfirmed-artifact`(stale-artifact 가드, commit-SHA baseline 규칙과 대칭).
 - **전면 fail-loud probe (리뷰 하드닝)** — `node`의 모든 non-zero 종료를 표면화: `rc=3` → `parse-error`, 그 외(node 부재/크래시) → `parser-unavailable`; 추정 `npm test`로 폴백하지 않는다.
 - **복원-안전 self-test (리뷰 하드닝)** — no-eval 가드 self-test가 tracked `verify-probe.sh`를 덮어쓰는 대신 `DEEP_GOAL_PROBE_SCRIPT`로 임시 fixture를 주입해, 중단된 실행이 저장소를 파손하지 않는다.
+- **감지 커맨드 결합 (리뷰 하드닝)** — `confirmed-command`는 proof 텍스트가 *감지된* 커맨드와 일치할 때만(probe=confirmed는 필요조건이나 충분조건 아님); `npm publish`·`make deploy` 같은 임의 커맨드-형태는 `unconfirmed-command`로 절대 ready-to-run 렌더하지 않는다.
+- **HEAD 도달 commit SHA (리뷰 하드닝)** — commit SHA는 `BASELINE_HEAD..HEAD` 구간(baseline strict 후손 **AND** 현재 HEAD 도달)에 있을 때만 `objective-artifact`; baseline 후손이지만 현재 라인에 없는 side-branch 커밋은 `unconfirmed-artifact`.
 
 ---
 

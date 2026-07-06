@@ -57,16 +57,21 @@ case "$(classify_proof_line 'npm publish' confirmed '' 'npm test')" in unconfirm
 gitwork="$(mktemp -d "${TMPDIR:-/tmp}/deep-goal-git.XXXXXX")"
 ( cd "$gitwork" && git init -q && git config user.email t@t && git config user.name t
   git commit -q --allow-empty -m c1; base="$(git rev-parse HEAD)"
-  git commit -q --allow-empty -m c2; desc="$(git rev-parse HEAD)"
-  # 무관 브랜치는 orphan 으로 구성(진짜 baseline 후손 아님 — plan 원본 '-b base' 는 후손이라 objective 로 오판).
+  git commit -q --allow-empty -m c2; desc="$(git rev-parse HEAD)"      # main 라인 tip = c2
+  # side branch: baseline 후손이나 현재 HEAD 미도달(R2 Fix 5 negative)
+  git checkout -q -b side "$base" && git commit -q --allow-empty -m s1; sidec="$(git rev-parse HEAD)"
+  # 무관 orphan: baseline 후손 아님(기존 negative)
   git checkout -q --orphan unrel && git commit -q --allow-empty -m u1; unrel="$(git rev-parse HEAD)"
-  # (Fix 9b positive) baseline 의 strict 후손 SHA → objective
+  git checkout -q "$desc"     # HEAD 를 main 라인(c2, detached)으로 복원 — Fix 5 도달성 판정 기준
+  # (positive) baseline strict 후손 AND 현재 HEAD 도달 → objective
   case "$(classify_proof_line "$desc" '' "$base")" in objective-artifact) : ;; *) exit 9; esac
-  # (Fix 9b negative) baseline 자신 → unconfirmed(새 작업 아님)
+  # (negative) baseline 자신 → unconfirmed(새 작업 아님)
   case "$(classify_proof_line "$base" '' "$base")" in unconfirmed-artifact) : ;; *) exit 9; esac
-  # (Fix 9b negative) 무관 브랜치(baseline 후손 아님) → unconfirmed
+  # (R2 Fix 5 negative) baseline 후손이나 현재 HEAD 미도달 side-branch → unconfirmed
+  case "$(classify_proof_line "$sidec" '' "$base")" in unconfirmed-artifact) : ;; *) exit 9; esac
+  # (negative) 무관 orphan(baseline 후손 아님) → unconfirmed
   case "$(classify_proof_line "$unrel" '' "$base")" in unconfirmed-artifact) : ;; *) exit 9; esac
-) && ok "classify: SHA objective iff baseline strict descendant (Fix 9b)" || bad "classify: baseline-descendant binding (Fix 9b)"
+) && ok "classify: SHA objective iff in baseline..HEAD (Fix 9b + R2 Fix 5)" || bad "classify: baseline..HEAD binding (Fix 9b + R2 Fix 5)"
 rm -rf "$gitwork"; gitwork=""
 # (R1 Fix 1 + Fix 9a) 파일+digest freshness 바인딩: baseline 후손 Add 파일만 objective.
 gitwork="$(mktemp -d "${TMPDIR:-/tmp}/deep-goal-fgit.XXXXXX")"

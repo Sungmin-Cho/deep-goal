@@ -48,15 +48,18 @@ classify_proof_line() {
       printf 'subjective-placeholder\n'; return 0 ;;
   esac
   tok="${text%% *}"
-  # (2a) commit SHA — baseline 의 strict 후손만 objective(plan-R4 Fix 9b: 현재-task 연결 증명).
+  # (2a) commit SHA — baseline..HEAD 구간만 objective(plan-R4 Fix 9b + R2 Fix 5: 현재-task 연결 증명).
   if printf '%s' "$tok" | grep -qE '^[0-9a-f]{7,40}$' && git rev-parse --verify -q "${tok}^{commit}" >/dev/null 2>&1; then
     [ -z "$base" ] && base="$(git rev-parse HEAD 2>/dev/null)"
     full="$(git rev-parse --verify -q "${tok}^{commit}" 2>/dev/null)"
     bfull="$(git rev-parse --verify -q "${base}^{commit}" 2>/dev/null)"
-    if [ -n "$bfull" ] && [ "$full" != "$bfull" ] && git merge-base --is-ancestor "$bfull" "$full" 2>/dev/null; then
-      printf 'objective-artifact\n'; return 0     # baseline 의 strict 후손 = goal 중 생성된 새 커밋
+    # baseline 의 strict 후손(현재-task) AND 현재 HEAD 도달 가능(옆 브랜치 배제, R2 Fix 5) = baseline..HEAD.
+    if [ -n "$bfull" ] && [ "$full" != "$bfull" ] \
+       && git merge-base --is-ancestor "$bfull" "$full" 2>/dev/null \
+       && git merge-base --is-ancestor "$full" HEAD 2>/dev/null; then
+      printf 'objective-artifact\n'; return 0     # baseline..HEAD = 현재 라인에 생성된 새 커밋
     fi
-    printf 'unconfirmed-artifact\n'; return 0      # baseline 자신/조상/무관 브랜치 → stale
+    printf 'unconfirmed-artifact\n'; return 0      # baseline 자신/조상/HEAD 미도달 side-branch/무관 → stale
   fi
   # (2b) 파일 + 선언 digest 실제 계산·대조(plan-R4 Fix 9a) + baseline freshness 바인딩(R1 Fix 1).
   if [ -e "$tok" ]; then
