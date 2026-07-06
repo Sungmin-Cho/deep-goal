@@ -34,7 +34,7 @@ user-invocable: true
 
 **Cross-platform self-containment**: 타 플랫폼에서 `deep-goal-workflow` 자동 로드가 약해도 동작하도록, 아래 핵심 규칙을 **의도적으로 인라인 보존**한다. 이는 `deep-goal-workflow`와의 의도적 duplication이며, 변경 시 양쪽을 동기화해야 한다.
 
-<!-- SYNC: mirrors deep-goal-workflow + references/condition-compiler.md·platform-matrix.md — 변경 시 동기화 -->
+<!-- SYNC: mirrors deep-goal-workflow + references/condition-compiler.md(render decision·self-report caveat)·platform-matrix.md·fitness-rubric.md(부재 또는 부실) — 변경 시 동기화 -->
 
 ---
 
@@ -53,7 +53,7 @@ deep-goal의 역할은 완성된 `/goal` 조건을 제시하는 데서 끝나고
 | 판정 | 신호 | 처리 |
 |---|---|---|
 | ✅ **적합** | 단일 목표 · 검증 가능한 종료조건 · 적정 크기 · 진행 증명 루프 존재 | 4~6단계 직행 |
-| 🔧 **재구성** | 종료조건 모호 / 범위 과대 / 증명 방법 부재 | 측정 가능화·분해·커맨드 식별 제안 |
+| 🔧 **재구성** | 종료조건 모호 / 범위 과대 / 증명 방법 부재 또는 부실(주관·비실행·미확인) | 측정 가능화·분해·커맨드 식별 제안 |
 | ⛔ **반려** | 검증 불가 주관 목표 / 단발성 / 무관한 잡다 목록 | 이유 + 대안(`/loop`·일반 작업) 제시 |
 
 상세 기준은 `references/fitness-rubric.md` 참조.
@@ -80,6 +80,10 @@ Claude의 `/goal` 평가자(Haiku 모델)는 **도구를 호출하지 않으며*
 > "각 단계/게이트 결과를 대화에 명시 보고하라."
 
 이 지침이 없으면 Claude가 내부적으로 검증을 완료해도 평가자가 종료를 판정하지 못한다. 대화에 명시 보고된 결과가 있어야 종료 판정이 가능하다.
+
+**신뢰 한계(정직 caveat)**: 이 표면화 출력은 평가자가 독립 검증하지 않는 self-report다. 고위험 goal은 검증가능 anchor(commit SHA·CI URL·deep-work `session-receipt.json`)를 우선한다.
+
+**증명 방법 verifiability**: prep-scout가 confirmed한 커맨드/객관 아티팩트만 ready-to-run으로 제시하고, unconfirmed(추정)·주관 placeholder는 "⚠️ 미검증" 표시 + 재구성 유도(references/condition-compiler.md render decision과 동기).
 
 ---
 

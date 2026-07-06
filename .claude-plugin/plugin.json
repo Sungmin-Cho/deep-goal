@@ -1,6 +1,6 @@
 {
   "name": "deep-goal",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Goal condition compiler — evaluates long-running task requests, reshapes them to fit, scouts prerequisites, and compiles ready-to-run native /goal conditions; skill-based entry (cross-platform: Claude Code / Codex / Copilot / Gemini)",
   "author": { "name": "Sungmin-Cho" },
   "repository": "https://github.com/Sungmin-Cho/claude-deep-goal.git",

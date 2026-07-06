@@ -29,6 +29,8 @@ Claude의 `/goal` 평가자(Haiku 모델)는 **도구를 호출하지 않으며*
 
 이 지침이 없으면 Claude가 내부적으로 검증을 완료해도 평가자가 종료를 판정하지 못한다. deep-goal이 책임지는 비자명한 컴파일 규칙이다.
 
+> **신뢰 한계(정직 caveat)**: 이 표면화 출력은 평가자가 **독립 검증하지 않는** self-report다 — 실행 모델이 커맨드를 돌리지 않고 "통과"를 출력해도 평가자는 수용할 수 있다. 고위험 goal의 증명 방법은 순수 대화 paste보다 검증가능 anchor(commit SHA·CI run URL·deep-work `session-receipt.json`)를 우선한다.
+
 **표면화 지침 문구 예시:**
 - "각 단계 결과(phase 전환·승인 게이트·review verdict·테스트 출력)를 대화에 명시적으로 보고할 것."
 - "각 게이트 통과 결과를 대화에 보고한 뒤에만 다음 단계로 진행한다."
@@ -85,9 +87,111 @@ or stop after 40 turns.
 
 ---
 
+## 증명 방법 verifiability 검사 (classify → render — 필수)
+
+증명 방법은 **먼저 `classify_proof_line`으로 분류**(텍스트+probe+git/파일 실측에서만 클래스 파생)한
+뒤 그 출력만 `render_proof_line`에 전달한다(정본은 `scripts/lib/proof-gate.sh`, 아래는 sync-검사되는 미러). 5-클래스:
+
+| 클래스 | 판정 근거(classify) | 렌더링(render) |
+|---|---|---|
+| `confirmed-command` | 실행형 커맨드 shape **AND** probe=confirmed **AND 감지 커맨드와 일치**(R2 Fix 4 — 임의 커맨드 ready 금지) | 그대로 (ready-to-run) |
+| `objective-artifact` | **BASELINE_HEAD..HEAD 구간의 commit SHA**(strict 후손 AND 현재 HEAD 도달 — plan-R4 Fix 9b + R2 Fix 5) 또는 **선언 digest가 실제 계산과 일치하고 baseline 후손 커밋에서 Add/Modify 된 파일**(plan-R4 Fix 9 + R1 Fix 1 freshness) | 그대로 (ready-to-run) |
+| `unconfirmed-command` | 실행형 커맨드 shape **AND** (probe≠confirmed **또는 감지 커맨드 불일치** — `npm publish`·`make deploy` 등) | ⚠️ 미검증 + 실행 전 존재 확인 |
+| `unconfirmed-artifact` | **일반 URL** · **bare 선재 파일** · **digest 불일치 파일** · **선재/미추적 파일+해시**(baseline 후손 아님 — R1 Fix 1) · **baseline 자신/조상/HEAD 미도달 side-branch/무관 브랜치 SHA**(plan-R4 Fix 9 + R2 Fix 5 — 실측 없이 ready 금지) | ⚠️ 미검증 + 신선도/현재-작업 바인딩 확인 |
+| `subjective-placeholder` | "수동 확인"·"완료되면" 등 실행 불가 산문, 또는 미분류(안전 수렴) | **절대 ready-to-run 금지** + 재구성 유도 |
+
+```bash
+# <!-- deep-goal:render-decision:start -->
+# _sha256: 파일 → 소문자 hex digest(계산 불가 시 빈 출력). 크로스플랫폼(shasum/sha256sum).
+_sha256() {
+  if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" 2>/dev/null | awk '{print $1}'
+  elif command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" 2>/dev/null | awk '{print $1}'; fi
+}
+# _norm_run: "npm test" 를 "npm run test" 로 정규화(그 외 그대로) — confirmed-command 일치 비교용(R2 Fix 4).
+_norm_run() { case "$1" in "npm test") printf 'npm run test' ;; *) printf '%s' "$1" ;; esac; }
+# classify_proof_line: 증명 방법 텍스트 + probe 클래스 → 렌더 클래스(결정론, 클래스 주입 불가).
+#   $1=proof-method 텍스트, $2=probe 클래스(confirmed|unconfirmed|""), $3=BASELINE_HEAD(goal 시작 커밋;
+#   비면 현재 HEAD), $4=감지 커맨드(detect_proof_command 의 커맨드 필드; confirmed-command 결합용 R2 Fix 4).
+#   objective SHA 는 baseline 의 strict 후손만 인정(plan-R4 Fix 9b).
+classify_proof_line() {
+  local text="$1" probe="${2:-}" base="${3:-}" det="${4:-}" tok decl want got full bfull
+  # (1) 주관 placeholder(실행 불가 산문) 최우선 — confirmed/objective 경로로 새지 못하게
+  case "$text" in
+    *수동*|*확인한다*|*구현\ 완료*|*완료되면*|*적절히*|*알아서*|*대충*)
+      printf 'subjective-placeholder\n'; return 0 ;;
+  esac
+  tok="${text%% *}"
+  # (2a) commit SHA — baseline..HEAD 구간만 objective(plan-R4 Fix 9b + R2 Fix 5: 현재-task 연결 증명).
+  if printf '%s' "$tok" | grep -qE '^[0-9a-f]{7,40}$' && git rev-parse --verify -q "${tok}^{commit}" >/dev/null 2>&1; then
+    [ -z "$base" ] && base="$(git rev-parse HEAD 2>/dev/null)"
+    full="$(git rev-parse --verify -q "${tok}^{commit}" 2>/dev/null)"
+    bfull="$(git rev-parse --verify -q "${base}^{commit}" 2>/dev/null)"
+    # baseline 의 strict 후손(현재-task) AND 현재 HEAD 도달 가능(옆 브랜치 배제, R2 Fix 5) = baseline..HEAD.
+    if [ -n "$bfull" ] && [ "$full" != "$bfull" ] \
+       && git merge-base --is-ancestor "$bfull" "$full" 2>/dev/null \
+       && git merge-base --is-ancestor "$full" HEAD 2>/dev/null; then
+      printf 'objective-artifact\n'; return 0     # baseline..HEAD = 현재 라인에 생성된 새 커밋
+    fi
+    printf 'unconfirmed-artifact\n'; return 0      # baseline 자신/조상/HEAD 미도달 side-branch/무관 → stale
+  fi
+  # (2b) 파일 + 선언 digest 실제 계산·대조(plan-R4 Fix 9a) + baseline freshness 바인딩(R1 Fix 1).
+  if [ -e "$tok" ]; then
+    decl="$(printf '%s' "$text" | grep -oE 'sha256:[0-9a-fA-F]{64}' | head -1)"
+    if [ -n "$decl" ]; then
+      want="$(printf '%s' "${decl#sha256:}" | tr 'A-F' 'a-f')"
+      got="$(_sha256 "$tok")"
+      if [ -n "$got" ] && [ "$got" = "$want" ]; then
+        # digest 일치 — stale 방지(R1 Fix 1): baseline 후손 커밋에서 Add/Modify 된 파일만 objective.
+        # 선재/미추적 파일은 현재 해시가 맞아도 현재-작업 산출물 증명이 아님(SHA baseline 가드와 대칭).
+        [ -z "$base" ] && base="$(git rev-parse HEAD 2>/dev/null)"
+        if [ -n "$base" ] && [ -n "$(git log --diff-filter=AM "$base"..HEAD -- "$tok" 2>/dev/null)" ]; then
+          printf 'objective-artifact\n'; return 0
+        fi
+        printf 'unconfirmed-artifact\n'; return 0   # 선재/미추적 파일+현재 해시만 → stale 가능
+      fi
+      printf 'unconfirmed-artifact\n'; return 0    # digest 불일치/계산 불가
+    fi
+    printf 'unconfirmed-artifact\n'; return 0       # bare 선재 파일(해시 없음) → 검증 필요
+  fi
+  # (3) 일반 URL — 컴파일 시점 검증 불가 → unconfirmed-artifact
+  case "$text" in
+    http://*|https://*) printf 'unconfirmed-artifact\n'; return 0 ;;
+  esac
+  # (4) 실행형 커맨드 shape → probe 확인 + 감지 커맨드 일치 여부로 분기(R2 Fix 4)
+  case "$text" in
+    npm\ *|npx\ *|yarn\ *|pnpm\ *|pytest*|python\ -m\ *|go\ test*|go\ build*|cargo\ *|make\ *|tsc\ *|*--noEmit*)
+      # confirmed-command 는 probe=confirmed 이고 proof 텍스트가 감지 커맨드와 일치할 때만 —
+      # 임의 커맨드-형태(npm publish·make deploy 등)는 감지 커맨드가 아니므로 unconfirmed-command.
+      if [ "$probe" = "confirmed" ] && [ -n "$det" ] && [ "$(_norm_run "$text")" = "$(_norm_run "$det")" ]; then
+        printf 'confirmed-command\n'; return 0
+      fi
+      printf 'unconfirmed-command\n'; return 0 ;;
+  esac
+  # (5) 그 외 산문 → 안전 수렴(절대 ready-to-run 아님)
+  printf 'subjective-placeholder\n'; return 0
+}
+# render_proof_line: classify 출력 클래스 → /goal 조건 라인. classify 출력만 소비.
+render_proof_line() {
+  case "$1" in
+    confirmed-command|objective-artifact)
+      printf '%s\n' "$2" ;;                                                       # ready-to-run 그대로
+    unconfirmed-command)
+      printf '⚠️ 미검증 — `%s` 가 실제 존재하는지 실행 전 확인 필요\n' "$2" ;;        # ready-to-run 단정 금지
+    unconfirmed-artifact)
+      printf '⚠️ 미검증 — %s 의 유효성·신선도(선재/baseline stale 여부)를 실행 전 확인 필요; 콘텐츠 검증 커맨드·해시 또는 baseline 이후 새 커밋으로 앵커 권장\n' "$2" ;;  # URL·선재파일·stale SHA
+    subjective-placeholder)
+      printf '⚠️ 미검증(주관) — 실행 가능한 검증 커맨드로 재구성 필요 (현재: %s)\n' "$2" ;;  # 절대 ready-to-run 아님
+    *)
+      printf '⚠️ 미검증 — 분류 불가, 실행 전 확인 필요 (%s)\n' "$2" ;;              # 안전 수렴
+  esac
+}
+# 파이프라인: render_proof_line "$(classify_proof_line "$text" "$probe" "$base" "$detected")" "$text"
+# <!-- deep-goal:render-decision:end -->
+```
+
 ## 컴파일 절차 요약
 
-1. 4요소가 모두 채워졌는지 확인
+1. 4요소가 모두 채워졌는지 확인 + 증명 방법을 `classify_proof_line`으로 분류(텍스트+probe+git/파일 실측) → `render_proof_line` 렌더 — confirmed-command/objective-artifact만 ready-to-run, unconfirmed-*/placeholder는 미검증 표시(클래스는 산문이 지정하지 않는다; URL은 신선도 미검증)
 2. 평가자 표면화 지침을 조건 끝 또는 적절한 위치에 삽입
 3. 문자 수 추산 → 2,800자 초과 예상 또는 순차 게이트 3개 이상이면 PLAN.md 분리
 4. 플랫폼 분기 적용 (`references/platform-matrix.md` 참조)

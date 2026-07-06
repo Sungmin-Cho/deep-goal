@@ -71,6 +71,11 @@ ag skills/deep-goal/SKILL.md '(표면화|대화에[[:space:]]?(명시|보고))' 
 ag skills/deep-goal/SKILL.md '(Codex|codex)' "entry: Codex branch"
 ag skills/deep-goal/SKILL.md 'Skill\(' "entry: SDK/programmatic Skill() invoke documented"
 ag skills/deep-goal/SKILL.md '\$deep-goal:deep-goal' "entry: Codex user entry (\$form) documented (high2)"
+# Task 5 (design-R4): fallback SKILL.md inline mirror of verifiability gate + caveat.
+# NOTE: ag uses grep -qE, so the literal '(추정)' parens are escaped to match the literal text.
+ag skills/deep-goal/SKILL.md '부재 또는 부실' "entry: rubric present-but-weak trigger inlined (sync)"
+ag skills/deep-goal/SKILL.md 'unconfirmed\(추정\)' "entry: unconfirmed(추정) verifiability flag inlined (sync)"
+ag skills/deep-goal/SKILL.md '독립 검증' "entry: self-report caveat inlined (sync)"
 # codex round3 medium fix: loose '자동 호출' token passed even if the skill claimed auto-invocable
 # IS possible (reversed invariant). Require the explicit NEGATIVE form, and FORBID the positive claim.
 ag skills/deep-goal/SKILL.md '자동 호출 ?(불가|할 수 없|안 ?됨|못 ?함)' "entry: native /goal NOT auto-invocable (explicit negative)"
@@ -83,6 +88,7 @@ ag skills/deep-goal-workflow/references/condition-compiler.md '4,?000' "compiler
 # rubric three verdicts
 ag skills/deep-goal-workflow/references/fitness-rubric.md '(반려|부적합)' "rubric has reject verdict"
 ag skills/deep-goal-workflow/references/fitness-rubric.md '재구성' "rubric has reshape verdict"
+ag skills/deep-goal-workflow/references/fitness-rubric.md '부재 또는 부실' "rubric: 재구성 trigger covers present-but-weak (부실)"
 
 echo "== workflow behavior contract (codex medium: prove the workflow exists, not just frontmatter) =="
 # All 6 workflow steps must be declared, plus the activation-template + reference-load rule.
@@ -106,6 +112,35 @@ for r in robust-implementation autonomous-evolution ship-and-document; do
 done
 # robust-implementation must disclose deep-work approval-gate caveat (spec §11)
 ag skills/deep-goal-workflow/references/recipes/robust-implementation.md '(Exit Gate|승인 게이트|승인)' "robust recipe discloses deep-work approval gate"
+# self-report trust caveat (#1-재규정) + session-receipt anchor contract
+ag skills/deep-goal-workflow/references/condition-compiler.md '독립 검증' "compiler: self-report caveat present"
+ag skills/deep-goal-workflow/references/platform-matrix.md '독립 검증' "platform-matrix: self-report caveat present"
+ag skills/deep-goal-workflow/references/recipes/robust-implementation.md 'session-receipt\.json' "robust recipe: receipt anchor path"
+ag skills/deep-goal-workflow/references/recipes/robust-implementation.md '/deep-finish' "robust recipe: /deep-finish required step"
+ag skills/deep-goal-workflow/references/recipes/robust-implementation.md '(stale|이전 세션)' "robust recipe: stale-receipt rejection clause"
+# R3 Fix 6 — Codex 레시피 계약도 receipt anchor 를 미러하는지(플랫폼 패리티). Codex 코드블록 구간 grep(awk 경계 추출).
+if [ -n "$(awk '/^### Codex/{f=1;next} f&&/^(##|---)/{exit} f&&/session-receipt\.json/{print;exit}' skills/deep-goal-workflow/references/recipes/robust-implementation.md 2>/dev/null)" ]; then
+  ok "robust recipe: Codex contract mirrors session-receipt anchor (R3 Fix 6)"
+else
+  bad "robust recipe: Codex contract mirrors session-receipt anchor (R3 Fix 6)"
+fi
+
+echo "== doc↔script mirror sync (plan-R2 Fix 4 — no markdown eval) =="
+# proof-gate.sh(정본 실행 로직) ↔ 문서 미러 스니펫의 마커 구간 텍스트 동등성 비교(추출·비교, 실행 아님).
+# 한쪽만 바뀌면 drift → RED. Markdown 은 어디서도 eval 하지 않는다.
+sync_check() {  # $1=marker-id, $2=doc, $3=label — 마커 구간 추출 후 텍스트 동등 비교(실행 아님)
+  local a b
+  a="$(awk "/deep-goal:$1:start/{f=1;next} /deep-goal:$1:end/{f=0} f" scripts/lib/proof-gate.sh 2>/dev/null)"
+  b="$(awk "/deep-goal:$1:start/{f=1;next} /deep-goal:$1:end/{f=0} f" "$2" 2>/dev/null)"
+  if [ -n "$a" ] && [ "$a" = "$b" ]; then ok "$3"; else bad "$3 (proof-gate.sh ↔ $2 drift)"; fi
+}
+sync_check probe skills/deep-goal-workflow/references/prep-scout.md "probe mirror ↔ proof-gate.sh in sync"
+ag skills/deep-goal-workflow/references/prep-scout.md 'deep-goal:probe:start' "prep-scout: probe mirror present"
+ag skills/deep-goal-workflow/references/prep-scout.md '(confirmed|unconfirmed)' "prep-scout: confirmed/unconfirmed labels present"
+sync_check render-decision skills/deep-goal-workflow/references/condition-compiler.md "render-decision mirror ↔ proof-gate.sh in sync"
+ag skills/deep-goal-workflow/references/condition-compiler.md 'classify_proof_line' "compiler: classifier (not just formatter) present"
+ag skills/deep-goal-workflow/references/condition-compiler.md 'subjective-placeholder' "compiler: verifiability class table present"
+ag skills/deep-goal-workflow/references/condition-compiler.md 'unconfirmed-artifact' "compiler: URL → unconfirmed-artifact (Fix 5) present"
 
 echo "== changelog version entry (I4) =="
 if [ -n "${CV:-}" ]; then
@@ -122,6 +157,21 @@ if [ -d agents ]; then bad "agents/ dir present (v1 non-goal)"; else ok "no agen
 
 echo "== placeholders =="
 an "skills CLAUDE.md AGENTS.md README.md README.ko.md" '(TBD|FIXME|TODO|작성 예정|fill in)' "no placeholder tokens in shipped content"
+
+echo "== release gate wiring (meta-guard) =="
+af scripts/lib/proof-gate.sh
+af scripts/verify-probe.sh
+ag package.json 'verify-probe\.sh' "package.json verify wires verify-probe.sh (release gate)"
+ag scripts/verify-probe.sh 'proof-gate\.sh' "verify-probe sources proof-gate.sh (no markdown eval — Fix 4)"
+# plan-R3 Fix 6b — no-eval 가드는 주석을 무시하고 실행 라인의 셸-토큰만 검사(설명 주석 false-fail 방지).
+no_eval_guard() {  # $1=file, $2=label. 주석 라인 제거 후 eval 셸-토큰만 금지.
+  # 경계: 시작 · ; & | 공백 · 서브셸 `(` · 커맨드 치환 `$(` 뒤의 eval(R3 Fix 7 — 서브셸/치환 우회 차단).
+  if grep -v '^[[:space:]]*#' "$1" 2>/dev/null | grep -qE '(^|[;&|([:space:]]|\$\()eval[[:space:]]'; then
+    bad "$2 (real eval invocation)"; else ok "$2"; fi
+}
+# R1 Fix 3 — 가드 타깃을 env-var 로 파라미터화(기본 실 스크립트). selftest 는 임시 fixture 를
+# 주입해 tracked verify-probe.sh 를 덮지 않는다(복원-안전).
+no_eval_guard "${DEEP_GOAL_PROBE_SCRIPT:-scripts/verify-probe.sh}" "verify-probe.sh has no eval invocation (trust boundary — Fix 4/6)"
 
 echo ""
 echo "Passed: $PASS, Failed: $FAIL"
