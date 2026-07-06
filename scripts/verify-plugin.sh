@@ -71,6 +71,11 @@ ag skills/deep-goal/SKILL.md '(표면화|대화에[[:space:]]?(명시|보고))' 
 ag skills/deep-goal/SKILL.md '(Codex|codex)' "entry: Codex branch"
 ag skills/deep-goal/SKILL.md 'Skill\(' "entry: SDK/programmatic Skill() invoke documented"
 ag skills/deep-goal/SKILL.md '\$deep-goal:deep-goal' "entry: Codex user entry (\$form) documented (high2)"
+# Task 5 (design-R4): fallback SKILL.md inline mirror of verifiability gate + caveat.
+# NOTE: ag uses grep -qE, so the literal '(추정)' parens are escaped to match the literal text.
+ag skills/deep-goal/SKILL.md '부재 또는 부실' "entry: rubric present-but-weak trigger inlined (sync)"
+ag skills/deep-goal/SKILL.md 'unconfirmed\(추정\)' "entry: unconfirmed(추정) verifiability flag inlined (sync)"
+ag skills/deep-goal/SKILL.md '독립 검증' "entry: self-report caveat inlined (sync)"
 # codex round3 medium fix: loose '자동 호출' token passed even if the skill claimed auto-invocable
 # IS possible (reversed invariant). Require the explicit NEGATIVE form, and FORBID the positive claim.
 ag skills/deep-goal/SKILL.md '자동 호출 ?(불가|할 수 없|안 ?됨|못 ?함)' "entry: native /goal NOT auto-invocable (explicit negative)"
