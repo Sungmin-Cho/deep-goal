@@ -165,7 +165,8 @@ ag package.json 'verify-probe\.sh' "package.json verify wires verify-probe.sh (r
 ag scripts/verify-probe.sh 'proof-gate\.sh' "verify-probe sources proof-gate.sh (no markdown eval — Fix 4)"
 # plan-R3 Fix 6b — no-eval 가드는 주석을 무시하고 실행 라인의 셸-토큰만 검사(설명 주석 false-fail 방지).
 no_eval_guard() {  # $1=file, $2=label. 주석 라인 제거 후 eval 셸-토큰만 금지.
-  if grep -v '^[[:space:]]*#' "$1" 2>/dev/null | grep -qE '(^|[;&|[:space:]])eval[[:space:]]'; then
+  # 경계: 시작 · ; & | 공백 · 서브셸 `(` · 커맨드 치환 `$(` 뒤의 eval(R3 Fix 7 — 서브셸/치환 우회 차단).
+  if grep -v '^[[:space:]]*#' "$1" 2>/dev/null | grep -qE '(^|[;&|([:space:]]|\$\()eval[[:space:]]'; then
     bad "$2 (real eval invocation)"; else ok "$2"; fi
 }
 # R1 Fix 3 — 가드 타깃을 env-var 로 파라미터화(기본 실 스크립트). selftest 는 임시 fixture 를

@@ -29,6 +29,8 @@
 - **복원-안전 self-test (리뷰 하드닝)** — no-eval 가드 self-test가 tracked `verify-probe.sh`를 덮어쓰는 대신 `DEEP_GOAL_PROBE_SCRIPT`로 임시 fixture를 주입해, 중단된 실행이 저장소를 파손하지 않는다.
 - **감지 커맨드 결합 (리뷰 하드닝)** — `confirmed-command`는 proof 텍스트가 *감지된* 커맨드와 일치할 때만(probe=confirmed는 필요조건이나 충분조건 아님); `npm publish`·`make deploy` 같은 임의 커맨드-형태는 `unconfirmed-command`로 절대 ready-to-run 렌더하지 않는다.
 - **HEAD 도달 commit SHA (리뷰 하드닝)** — commit SHA는 `BASELINE_HEAD..HEAD` 구간(baseline strict 후손 **AND** 현재 HEAD 도달)에 있을 때만 `objective-artifact`; baseline 후손이지만 현재 라인에 없는 side-branch 커밋은 `unconfirmed-artifact`.
+- **Codex 레시피 anchor 패리티 (리뷰 하드닝)** — `robust-implementation` Codex 계약이 Claude 예시의 `session-receipt.json` anchor(경로·envelope identity·현재-세션 바인딩·stale 거부·`/deep-finish` 필수)를 미러해, Codex 사용자도 동일한 anchor 규율을 받는다.
+- **서브셸 / 커맨드 치환 eval 가드 (리뷰 하드닝)** — release-lint no-eval 가드의 경계 클래스에 `(`·`$(`를 추가해, `(eval …)`·`$(eval …)`가 Markdown-eval 회귀를 trust-boundary 검사에서 우회하지 못한다.
 
 ---
 

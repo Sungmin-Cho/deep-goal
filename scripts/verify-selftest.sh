@@ -84,6 +84,16 @@ printf '#!/usr/bin/env bash\neval "$UNSAFE"\n. scripts/lib/proof-gate.sh\n' > "$
 if DEEP_GOAL_PROBE_SCRIPT="$fx5/probe.sh" bash scripts/verify-plugin.sh 2>&1 | grep -qE '✗.*no eval invocation'; then
   echo "PASS: no-eval guard catches real eval (5b)"
 else echo "FAIL: no-eval guard blind to real eval"; fail=$((fail+1)); fi
+# 5c: 서브셸 (eval …) 우회 → 가드가 잡아야 함(R3 Fix 7)
+printf '#!/usr/bin/env bash\n(eval "$UNSAFE")\n. scripts/lib/proof-gate.sh\n' > "$fx5/probe.sh"
+if DEEP_GOAL_PROBE_SCRIPT="$fx5/probe.sh" bash scripts/verify-plugin.sh 2>&1 | grep -qE '✗.*no eval invocation'; then
+  echo "PASS: no-eval guard catches subshell eval (5c)"
+else echo "FAIL: no-eval guard blind to subshell eval"; fail=$((fail+1)); fi
+# 5d: 커맨드 치환 $(eval …) 우회 → 가드가 잡아야 함(R3 Fix 7)
+printf '#!/usr/bin/env bash\nx=$(eval "$UNSAFE")\n. scripts/lib/proof-gate.sh\n' > "$fx5/probe.sh"
+if DEEP_GOAL_PROBE_SCRIPT="$fx5/probe.sh" bash scripts/verify-plugin.sh 2>&1 | grep -qE '✗.*no eval invocation'; then
+  echo "PASS: no-eval guard catches command-subst eval (5d)"
+else echo "FAIL: no-eval guard blind to command-subst eval"; fail=$((fail+1)); fi
 rm -rf "$fx5"
 
 # Trap will clean residual fixtures; report result.

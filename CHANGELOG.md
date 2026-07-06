@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Restore-safe self-test (review hardening)** — the no-eval-guard self-test injects a temporary fixture via `DEEP_GOAL_PROBE_SCRIPT` instead of overwriting the tracked `verify-probe.sh`, so an interrupted run can't corrupt the repo.
 - **Detected-command binding (review hardening)** — `confirmed-command` requires the proof text to match the *detected* command (probe=confirmed is necessary but not sufficient); an arbitrary command-shape like `npm publish` / `make deploy` is `unconfirmed-command`, never rendered ready-to-run.
 - **HEAD-reachable commit SHA (review hardening)** — a commit SHA is `objective-artifact` only when it lies in `BASELINE_HEAD..HEAD` (strict baseline descendant **and** reachable from the current HEAD); a side-branch commit that descends from baseline but isn't on the current line is `unconfirmed-artifact`.
+- **Codex recipe anchor parity (review hardening)** — the `robust-implementation` Codex contract mirrors the Claude example's `session-receipt.json` anchor (path, envelope identity, current-session binding, stale rejection, required `/deep-finish`), so Codex users get the same anchor discipline.
+- **Subshell / command-substitution eval guard (review hardening)** — the release-lint no-eval guard's boundary class now includes `(` and `$(`, so `(eval …)` and `$(eval …)` can't slip a Markdown-eval regression past the trust-boundary check.
 
 ---
 
