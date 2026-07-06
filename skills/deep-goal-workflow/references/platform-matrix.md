@@ -29,6 +29,7 @@ Claude 평가자 제약 때문에 다음 규칙을 반드시 적용한다:
 2. **게이트/단계 결과를 대화에 명시 보고하라는 지침 필수**: 평가자가 판정하려면 해당 정보가 대화에 있어야 함
 3. **4,000자 한도 준수**: ~2,800자 또는 순차 게이트 3개 이상이면 PLAN.md 분리
 4. **`or stop after N turns` 상한 권장**: 무한 루프 방지
+5. **self-report 신뢰 한계 고지**: Haiku 평가자는 대화에 표면화된 self-report만으로 판정하며 **독립 검증하지 않는다**. 고위험 goal은 증명을 외부 확인 가능 anchor(commit SHA, CI run URL, deep-work `session-receipt.json`)에 고정하도록 안내한다.
 
 ### Claude 컴파일 예시 (단발)
 

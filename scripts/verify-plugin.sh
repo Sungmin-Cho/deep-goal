@@ -107,6 +107,12 @@ for r in robust-implementation autonomous-evolution ship-and-document; do
 done
 # robust-implementation must disclose deep-work approval-gate caveat (spec §11)
 ag skills/deep-goal-workflow/references/recipes/robust-implementation.md '(Exit Gate|승인 게이트|승인)' "robust recipe discloses deep-work approval gate"
+# self-report trust caveat (#1-재규정) + session-receipt anchor contract
+ag skills/deep-goal-workflow/references/condition-compiler.md '독립 검증' "compiler: self-report caveat present"
+ag skills/deep-goal-workflow/references/platform-matrix.md '독립 검증' "platform-matrix: self-report caveat present"
+ag skills/deep-goal-workflow/references/recipes/robust-implementation.md 'session-receipt\.json' "robust recipe: receipt anchor path"
+ag skills/deep-goal-workflow/references/recipes/robust-implementation.md '/deep-finish' "robust recipe: /deep-finish required step"
+ag skills/deep-goal-workflow/references/recipes/robust-implementation.md '(stale|이전 세션)' "robust recipe: stale-receipt rejection clause"
 
 echo "== doc↔script mirror sync (plan-R2 Fix 4 — no markdown eval) =="
 # proof-gate.sh(정본 실행 로직) ↔ 문서 미러 스니펫의 마커 구간 텍스트 동등성 비교(추출·비교, 실행 아님).
