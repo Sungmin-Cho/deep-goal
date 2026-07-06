@@ -119,6 +119,10 @@ sync_check() {  # $1=marker-id, $2=doc, $3=label — 마커 구간 추출 후 �
 sync_check probe skills/deep-goal-workflow/references/prep-scout.md "probe mirror ↔ proof-gate.sh in sync"
 ag skills/deep-goal-workflow/references/prep-scout.md 'deep-goal:probe:start' "prep-scout: probe mirror present"
 ag skills/deep-goal-workflow/references/prep-scout.md '(confirmed|unconfirmed)' "prep-scout: confirmed/unconfirmed labels present"
+sync_check render-decision skills/deep-goal-workflow/references/condition-compiler.md "render-decision mirror ↔ proof-gate.sh in sync"
+ag skills/deep-goal-workflow/references/condition-compiler.md 'classify_proof_line' "compiler: classifier (not just formatter) present"
+ag skills/deep-goal-workflow/references/condition-compiler.md 'subjective-placeholder' "compiler: verifiability class table present"
+ag skills/deep-goal-workflow/references/condition-compiler.md 'unconfirmed-artifact' "compiler: URL → unconfirmed-artifact (Fix 5) present"
 
 echo "== changelog version entry (I4) =="
 if [ -n "${CV:-}" ]; then
