@@ -80,14 +80,16 @@ awk -F: '/^[a-zA-Z][a-zA-Z0-9_-]* *:/ {print $1}' Makefile 2>/dev/null | head -2
 detect_proof_command() {
   local cmd rc pj
   if [ -f package.json ]; then
-    # plan-R1 Fix 2 — 파싱 실패를 exit 3 로 구분(fail-loud). 2>/dev/null 로 삼키지 않음.
     # plan-R3 Fix 7 — verify 최상위 우선순위(이 저장소가 verify-only). test 키만 "npm test", 그 외 "npm run <k>".
     # node 26 호환: cwd 의 손상 package.json 은 node 시작 시 package-scope 해석을 crash 시키므로,
     # 중립 cwd(/) 에서 fs.readFileSync 로 절대경로를 읽어 JSON.parse 한다(require("./..") 회피).
+    # R1 Fix 2 — node 실행 실패 전면 fail-loud: rc=3(파싱 실패)와 그 외 non-zero(node 부재·크래시)를
+    # 각각 표면화하고 추정 커맨드로 폴백하지 않는다. 2>/dev/null 은 에러 텍스트만 억제(판정은 rc 로).
     pj="$PWD/package.json"
-    cmd=$(cd / && node -e 'try{const fs=require("fs");const s=(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).scripts)||{};for(const k of ["verify","test","build","lint","typecheck","type-check","check"]){if(s[k]){process.stdout.write(k==="test"?"npm test":"npm run "+k);break}}}catch(e){process.exit(3)}' "$pj")
+    cmd=$(cd / && node -e 'try{const fs=require("fs");const s=(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).scripts)||{};for(const k of ["verify","test","build","lint","typecheck","type-check","check"]){if(s[k]){process.stdout.write(k==="test"?"npm test":"npm run "+k);break}}}catch(e){process.exit(3)}' "$pj" 2>/dev/null)
     rc=$?
     [ "$rc" -eq 3 ] && { printf 'unconfirmed\tnone\tparse-error:package.json 손상 — 수동 확인 필요\n'; return 0; }
+    [ "$rc" -ne 0 ] && { printf 'unconfirmed\tnone\tparser-unavailable:node 실행 불가 — 수동 확인 필요\n'; return 0; }
     [ -n "$cmd" ] && { printf 'confirmed\t%s\n' "$cmd"; return 0; }
     printf 'unconfirmed\tnpm test\n'; return 0     # package.json 있으나 script 부재 → 추정
   fi
