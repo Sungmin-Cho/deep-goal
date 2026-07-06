@@ -162,7 +162,9 @@ no_eval_guard() {  # $1=file, $2=label. 주석 라인 제거 후 eval 셸-토큰
   if grep -v '^[[:space:]]*#' "$1" 2>/dev/null | grep -qE '(^|[;&|[:space:]])eval[[:space:]]'; then
     bad "$2 (real eval invocation)"; else ok "$2"; fi
 }
-no_eval_guard scripts/verify-probe.sh "verify-probe.sh has no eval invocation (trust boundary — Fix 4/6)"
+# R1 Fix 3 — 가드 타깃을 env-var 로 파라미터화(기본 실 스크립트). selftest 는 임시 fixture 를
+# 주입해 tracked verify-probe.sh 를 덮지 않는다(복원-안전).
+no_eval_guard "${DEEP_GOAL_PROBE_SCRIPT:-scripts/verify-probe.sh}" "verify-probe.sh has no eval invocation (trust boundary — Fix 4/6)"
 
 echo ""
 echo "Passed: $PASS, Failed: $FAIL"

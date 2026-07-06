@@ -24,6 +24,9 @@
 - **fitness-rubric 재구성 트리거** — "증명 방법 부재"를 "부재 또는 부실"로 확장해 present-but-unverifiable 증명 방법(주관 placeholder·비실행 산문·unconfirmed 추정)을 재구성 대화로 유도한다.
 - **컴파일 절차** — presence-only "4요소 채움?" 검사를 `classify_proof_line` → `render_proof_line`로 승격.
 - **fallback SKILL.md** — self-contained 진입 스킬의 인라인 스니펫을 검증가능성 게이트 + caveat와 동기화해 약한 런타임 fallback이 구버전 규칙으로 unverifiable 조건을 출하하지 않게 한다.
+- **파일 아티팩트 freshness 바인딩 (리뷰 하드닝)** — 파일 + 일치하는 `sha256:` digest는 그 파일이 baseline 후손 커밋에서 Add/Modify 된 경우(`git log --diff-filter=AM $BASELINE_HEAD..HEAD`)에만 `objective-artifact`; 선재/미추적 파일은 현재 해시가 맞아도 `unconfirmed-artifact`(stale-artifact 가드, commit-SHA baseline 규칙과 대칭).
+- **전면 fail-loud probe (리뷰 하드닝)** — `node`의 모든 non-zero 종료를 표면화: `rc=3` → `parse-error`, 그 외(node 부재/크래시) → `parser-unavailable`; 추정 `npm test`로 폴백하지 않는다.
+- **복원-안전 self-test (리뷰 하드닝)** — no-eval 가드 self-test가 tracked `verify-probe.sh`를 덮어쓰는 대신 `DEEP_GOAL_PROBE_SCRIPT`로 임시 fixture를 주입해, 중단된 실행이 저장소를 파손하지 않는다.
 
 ---
 

@@ -5,7 +5,7 @@ set -u
 fail=0
 
 # Single trap to clean up all fixtures on exit (including Ctrl-C / abnormal termination).
-trap 'rm -f skills/.selftest-placeholder.md skills/deep-goal/.selftest-autoclaim.md /tmp/deep-goal-stub.md skills/deep-goal/.SKILL.md.selftest-bak scripts/.verify-probe.sh.selftest-bak' EXIT
+trap 'rm -f skills/.selftest-placeholder.md skills/deep-goal/.selftest-autoclaim.md /tmp/deep-goal-stub.md skills/deep-goal/.SKILL.md.selftest-bak' EXIT
 
 # (1) placeholder gate catches forbidden tokens in skills/ (an() C1 regression guard)
 # mkdir -p ensures skills/ exists even before Task 3 creates content there (harmless).
@@ -72,19 +72,19 @@ fi
 rm -rf "$fx"
 
 # (5) no-eval 가드는 설명 주석에 false-fail 안 하고 실제 eval 은 잡는다(plan-R3 Fix 6c).
-real="scripts/verify-probe.sh"; bak="scripts/.verify-probe.sh.selftest-bak"
-[ -f "$real" ] && cp "$real" "$bak"
+#     R1 Fix 3: tracked verify-probe.sh 를 덮지 않고 임시 fixture 를 DEEP_GOAL_PROBE_SCRIPT 로 주입(복원-안전).
+fx5="$(mktemp -d "${TMPDIR:-/tmp}/deep-goal-noeval.XXXXXX")"
 # 5a: 금지 토큰(eval)을 주석에만 언급 → no-eval 가드 라인은 PASS(✗ 없음)
-printf '#!/usr/bin/env bash\n# note: this script must never eval markdown sources\n. scripts/lib/proof-gate.sh\n' > "$real"
-if bash scripts/verify-plugin.sh 2>&1 | grep -qE '✗.*no eval invocation'; then
+printf '#!/usr/bin/env bash\n# note: this script must never eval markdown sources\n. scripts/lib/proof-gate.sh\n' > "$fx5/probe.sh"
+if DEEP_GOAL_PROBE_SCRIPT="$fx5/probe.sh" bash scripts/verify-plugin.sh 2>&1 | grep -qE '✗.*no eval invocation'; then
   echo "FAIL: no-eval guard false-fails on comment mention"; fail=$((fail+1))
 else echo "PASS: no-eval guard ignores comment mention (5a)"; fi
 # 5b: 실제 eval 호출 → no-eval 가드 라인 FAIL(✗)
-printf '#!/usr/bin/env bash\neval "$UNSAFE"\n. scripts/lib/proof-gate.sh\n' > "$real"
-if bash scripts/verify-plugin.sh 2>&1 | grep -qE '✗.*no eval invocation'; then
+printf '#!/usr/bin/env bash\neval "$UNSAFE"\n. scripts/lib/proof-gate.sh\n' > "$fx5/probe.sh"
+if DEEP_GOAL_PROBE_SCRIPT="$fx5/probe.sh" bash scripts/verify-plugin.sh 2>&1 | grep -qE '✗.*no eval invocation'; then
   echo "PASS: no-eval guard catches real eval (5b)"
 else echo "FAIL: no-eval guard blind to real eval"; fail=$((fail+1)); fi
-[ -f "$bak" ] && mv "$bak" "$real"
+rm -rf "$fx5"
 
 # Trap will clean residual fixtures; report result.
 if [ "$fail" -eq 0 ]; then

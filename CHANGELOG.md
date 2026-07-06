@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **fitness-rubric reshape trigger** — "증명 방법 부재" widened to "부재 또는 부실" so present-but-unverifiable proof methods (subjective placeholders, non-executable prose, unconfirmed guesses) are routed to a reshape conversation.
 - **compile procedure** — the presence-only "4 elements filled?" check is promoted to `classify_proof_line` → `render_proof_line`.
 - **fallback SKILL.md** — the self-contained entry skill's inline snippets are synced with the verifiability gate + caveat so weak-runtime fallbacks no longer ship unverifiable conditions with the old rules.
+- **Freshness-bound file artifacts (review hardening)** — a file + matching `sha256:` digest is `objective-artifact` only when the file was Added/Modified in a baseline-descendant commit (`git log --diff-filter=AM $BASELINE_HEAD..HEAD`); a pre-existing/untracked file with a correct current hash is `unconfirmed-artifact` (stale-artifact guard, symmetric with the commit-SHA baseline rule).
+- **Full fail-loud probe (review hardening)** — every non-zero `node` exit is surfaced: `rc=3` → `parse-error`, any other (node absent / crash) → `parser-unavailable`; the probe never falls back to a guessed `npm test`.
+- **Restore-safe self-test (review hardening)** — the no-eval-guard self-test injects a temporary fixture via `DEEP_GOAL_PROBE_SCRIPT` instead of overwriting the tracked `verify-probe.sh`, so an interrupted run can't corrupt the repo.
 
 ---
 
