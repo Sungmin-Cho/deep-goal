@@ -46,9 +46,11 @@ trap '[ -n "$work" ] && rm -rf "$work"; [ -n "$gitwork" ] && rm -rf "$gitwork"' 
   || bad "probe: node-absent fail-loud (R1 Fix 2, not fail-open npm test)"
 
 # --- classify (plan-R1 Fix 1: 클래스는 실측에서만 파생, 주입 불가) ---
-case "$(classify_proof_line '수동 확인' confirmed)" in subjective-placeholder) ok "classify: 수동 확인 → subjective (probe confirmed 무시)" ;; *) bad "classify: 수동 확인 bypass to confirmed/objective" ;; esac
-case "$(classify_proof_line 'npm test' confirmed)" in confirmed-command) ok "classify: npm test + confirmed → confirmed-command" ;; *) bad "classify: confirmed-command" ;; esac
-case "$(classify_proof_line 'npm test' unconfirmed)" in unconfirmed-command) ok "classify: npm test + unconfirmed → unconfirmed-command" ;; *) bad "classify: unconfirmed-command" ;; esac
+case "$(classify_proof_line '수동 확인' confirmed '' 'npm test')" in subjective-placeholder) ok "classify: 수동 확인 → subjective (probe confirmed 무시)" ;; *) bad "classify: 수동 확인 bypass to confirmed/objective" ;; esac
+case "$(classify_proof_line 'npm test' confirmed '' 'npm test')" in confirmed-command) ok "classify: npm test + confirmed + 감지일치 → confirmed-command" ;; *) bad "classify: confirmed-command" ;; esac
+case "$(classify_proof_line 'npm test' unconfirmed '' 'npm test')" in unconfirmed-command) ok "classify: npm test + unconfirmed → unconfirmed-command" ;; *) bad "classify: unconfirmed-command" ;; esac
+# R2 Fix 4 — probe=confirmed 라도 감지 커맨드(npm test)와 불일치하는 임의 커맨드 → unconfirmed-command
+case "$(classify_proof_line 'npm publish' confirmed '' 'npm test')" in unconfirmed-command) ok "classify: npm publish + confirmed but 감지 불일치 → unconfirmed-command (R2 Fix 4)" ;; *) bad "classify: arbitrary confirmed command leaked to confirmed-command (R2 Fix 4)" ;; esac
 
 # --- 아티팩트 freshness/현재-작업 바인딩 (plan-R2 Fix5 URL + plan-R3 Fix8 + plan-R4 Fix9 digest/baseline) ---
 # git fixture: baseline(c1) → 후손(c2). classify 에 BASELINE=c1 을 3번째 인자로 전달.
@@ -94,6 +96,6 @@ case "$(classify_proof_line 'https://ci.example/run/1' '')" in unconfirmed-artif
 case "$(render_proof_line "$(classify_proof_line '수동 확인' confirmed)" '수동 확인')" in *미검증*) ok "e2e: 수동 확인 → 미검증 (never ready-to-run)" ;; *) bad "e2e: 수동 확인 ready-to-run leak" ;; esac
 case "$(render_proof_line "$(classify_proof_line 'https://ci.example/run/1' '')" 'https://ci.example/run/1')" in *미검증*신선도*) ok "e2e: URL → 미검증 + 신선도 caveat" ;; *미검증*) ok "e2e: URL → 미검증" ;; *) bad "e2e: URL ready-to-run leak" ;; esac
 case "$(render_proof_line "$(classify_proof_line 'npm test' unconfirmed)" 'npm test')" in ⚠️*미검증*) ok "e2e: unconfirmed npm test → 미검증" ;; *) bad "e2e: unconfirmed → 미검증" ;; esac
-case "$(render_proof_line "$(classify_proof_line 'npm test' confirmed)" 'npm test')" in *미검증*) bad "e2e: confirmed must NOT be flagged" ;; *) ok "e2e: confirmed npm test → ready-to-run 그대로" ;; esac
+case "$(render_proof_line "$(classify_proof_line 'npm test' confirmed '' 'npm test')" 'npm test')" in *미검증*) bad "e2e: confirmed must NOT be flagged" ;; *) ok "e2e: confirmed npm test → ready-to-run 그대로" ;; esac
 
 echo ""; echo "probe/classify/render: Passed=$PASS Failed=$FAIL"; [ "$FAIL" -eq 0 ]

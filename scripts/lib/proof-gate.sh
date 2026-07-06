@@ -34,11 +34,14 @@ _sha256() {
   if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" 2>/dev/null | awk '{print $1}'
   elif command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" 2>/dev/null | awk '{print $1}'; fi
 }
+# _norm_run: "npm test" 를 "npm run test" 로 정규화(그 외 그대로) — confirmed-command 일치 비교용(R2 Fix 4).
+_norm_run() { case "$1" in "npm test") printf 'npm run test' ;; *) printf '%s' "$1" ;; esac; }
 # classify_proof_line: 증명 방법 텍스트 + probe 클래스 → 렌더 클래스(결정론, 클래스 주입 불가).
 #   $1=proof-method 텍스트, $2=probe 클래스(confirmed|unconfirmed|""), $3=BASELINE_HEAD(goal 시작 커밋;
-#   비면 현재 HEAD). objective SHA 는 baseline 의 strict 후손만 인정(plan-R4 Fix 9b).
+#   비면 현재 HEAD), $4=감지 커맨드(detect_proof_command 의 커맨드 필드; confirmed-command 결합용 R2 Fix 4).
+#   objective SHA 는 baseline 의 strict 후손만 인정(plan-R4 Fix 9b).
 classify_proof_line() {
-  local text="$1" probe="${2:-}" base="${3:-}" tok decl want got full bfull
+  local text="$1" probe="${2:-}" base="${3:-}" det="${4:-}" tok decl want got full bfull
   # (1) 주관 placeholder(실행 불가 산문) 최우선 — confirmed/objective 경로로 새지 못하게
   case "$text" in
     *수동*|*확인한다*|*구현\ 완료*|*완료되면*|*적절히*|*알아서*|*대충*)
@@ -78,10 +81,14 @@ classify_proof_line() {
   case "$text" in
     http://*|https://*) printf 'unconfirmed-artifact\n'; return 0 ;;
   esac
-  # (4) 실행형 커맨드 shape → probe 확인 여부로 분기
+  # (4) 실행형 커맨드 shape → probe 확인 + 감지 커맨드 일치 여부로 분기(R2 Fix 4)
   case "$text" in
     npm\ *|npx\ *|yarn\ *|pnpm\ *|pytest*|python\ -m\ *|go\ test*|go\ build*|cargo\ *|make\ *|tsc\ *|*--noEmit*)
-      [ "$probe" = "confirmed" ] && { printf 'confirmed-command\n'; return 0; }
+      # confirmed-command 는 probe=confirmed 이고 proof 텍스트가 감지 커맨드와 일치할 때만 —
+      # 임의 커맨드-형태(npm publish·make deploy 등)는 감지 커맨드가 아니므로 unconfirmed-command.
+      if [ "$probe" = "confirmed" ] && [ -n "$det" ] && [ "$(_norm_run "$text")" = "$(_norm_run "$det")" ]; then
+        printf 'confirmed-command\n'; return 0
+      fi
       printf 'unconfirmed-command\n'; return 0 ;;
   esac
   # (5) 그 외 산문 → 안전 수렴(절대 ready-to-run 아님)
@@ -102,5 +109,5 @@ render_proof_line() {
       printf '⚠️ 미검증 — 분류 불가, 실행 전 확인 필요 (%s)\n' "$2" ;;              # 안전 수렴
   esac
 }
-# 파이프라인: render_proof_line "$(classify_proof_line "$text" "$probe")" "$text"
+# 파이프라인: render_proof_line "$(classify_proof_line "$text" "$probe" "$base" "$detected")" "$text"
 # <!-- deep-goal:render-decision:end -->
