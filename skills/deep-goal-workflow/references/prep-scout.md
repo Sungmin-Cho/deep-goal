@@ -25,6 +25,11 @@ git rev-parse --is-inside-work-tree 2>/dev/null && echo "git" || echo "non-git"
 - **git 환경**: 브랜치·HEAD 정보를 함께 파악. 불변 제약에 "main 직접 push 금지" 등 추가 고려.
 - **non-git 환경**: 파일 시스템 기반 탐색만 수행. 버전 제약은 스킵.
 
+**Step 1 보강 (BASELINE_HEAD 캡처)**: git 환경이면 `BASELINE_HEAD=$(git rev-parse HEAD 2>/dev/null)`를 캡처해
+탐색 결과에 기록한다. 6단계 컴파일 조건은 SHA 기반 증명 방법에 이 baseline을 명시한다:
+"완료 증명 커밋은 baseline `<BASELINE_HEAD>` 이후 새 커밋이어야 함(baseline 자신/조상 불인정)."
+`classify_proof_line`은 이 값을 3번째 인자로 받는다(비면 현재 HEAD = 컴파일 시점 baseline).
+
 ### Step 2: 진행 증명 커맨드 식별
 
 다음 순서로 검증 커맨드를 탐색한다:
@@ -33,10 +38,11 @@ git rev-parse --is-inside-work-tree 2>/dev/null && echo "git" || echo "non-git"
 
 ```bash
 # package.json의 scripts 섹션 읽기
-# 우선순위: test > build > lint > typecheck
+# 우선순위: verify > test > build > lint > typecheck
 ```
 
-`scripts`에서 `test`, `build`, `lint`, `type-check`, `typecheck`, `check` 키를 찾아 해당 커맨드 추출.
+`scripts`에서 `verify`, `test`, `build`, `lint`, `type-check`, `typecheck`, `check` 키를 찾아 해당 커맨드 추출.
+(verify-only 저장소가 `npm run verify`로 confirmed 되도록 `verify`를 최상위에 둔다 — 아래 2d probe와 정합.)
 
 **2b. `Makefile` 확인**
 
@@ -62,13 +68,38 @@ awk -F: '/^[a-zA-Z][a-zA-Z0-9_-]* *:/ {print $1}' Makefile 2>/dev/null | head -2
 - `.gitlab-ci.yml` — GitLab CI
 - `Makefile` — 위에서 확인
 
-**2d. 언어별 기본 커맨드 추정**
+**2d. 진행 증명 커맨드 판정 — confirmed vs unconfirmed (probe)**
 
-탐색 결과가 없으면 파일 확장자로 추정:
-- TypeScript/JavaScript: `npm test`, `tsc --noEmit`
-- Python: `pytest`, `python -m pytest`
-- Go: `go test ./...`, `go build ./...`
-- Rust: `cargo test`, `cargo build`
+2a~2c가 manifest에서 **실제 발견**한 커맨드는 `confirmed`, 아래 probe가 파일 확장자로
+**추정**한 커맨드는 `unconfirmed`로 라벨링해 6단계로 전파한다(이 로직의 정본은
+`scripts/lib/proof-gate.sh`이며 아래는 그 미러 — sync 검사가 동등성 강제):
+
+```bash
+# <!-- deep-goal:probe:start -->
+# detect_proof_command — 출력 "<class>\t<command>[\t<note>]"(class ∈ confirmed|unconfirmed).
+detect_proof_command() {
+  local cmd rc
+  if [ -f package.json ]; then
+    # plan-R1 Fix 2 — 파싱 실패를 exit 3 로 구분(fail-loud). 2>/dev/null 로 삼키지 않음.
+    # plan-R3 Fix 7 — verify 최상위 우선순위(이 저장소가 verify-only). test 키만 "npm test", 그 외 "npm run <k>".
+    cmd=$(node -e 'try{const s=(require("./package.json").scripts)||{};for(const k of ["verify","test","build","lint","typecheck","type-check","check"]){if(s[k]){process.stdout.write(k==="test"?"npm test":"npm run "+k);break}}}catch(e){process.exit(3)}')
+    rc=$?
+    [ "$rc" -eq 3 ] && { printf 'unconfirmed\tnone\tparse-error:package.json 손상 — 수동 확인 필요\n'; return 0; }
+    [ -n "$cmd" ] && { printf 'confirmed\t%s\n' "$cmd"; return 0; }
+    printf 'unconfirmed\tnpm test\n'; return 0     # package.json 있으나 script 부재 → 추정
+  fi
+  [ -f pyproject.toml ] || [ -f pytest.ini ] || [ -f setup.cfg ] && { printf 'unconfirmed\tpytest\n'; return 0; }
+  [ -f go.mod ]    && { printf 'unconfirmed\tgo test ./...\n'; return 0; }
+  [ -f Cargo.toml ] && { printf 'unconfirmed\tcargo test\n'; return 0; }
+  printf 'unconfirmed\tnone\n'; return 0
+}
+# <!-- deep-goal:probe:end -->
+```
+
+> **fail-loud**: 손상 `package.json`은 `npm test` 추정(fail-open)이 아니라 `unconfirmed<TAB>none<TAB>parse-error`로
+> 표면화한다 — 6단계는 note가 있으면 미검증 표시 + parse-error caveat 를 포함한다.
+> **verify 최상위(Fix 7)**: verify-only 저장소(이 repo 포함)가 `npm run verify`로 confirmed 되게 우선순위에 편입.
+> 추정 언어 기본값(위 probe의 pytest/go test/cargo test)은 전부 `unconfirmed`이며, 6단계 render 가 "⚠️ 미검증" 표시를 붙인다.
 
 ### Step 3: 먼저 읽을 파일 식별
 

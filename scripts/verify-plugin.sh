@@ -107,6 +107,19 @@ done
 # robust-implementation must disclose deep-work approval-gate caveat (spec §11)
 ag skills/deep-goal-workflow/references/recipes/robust-implementation.md '(Exit Gate|승인 게이트|승인)' "robust recipe discloses deep-work approval gate"
 
+echo "== doc↔script mirror sync (plan-R2 Fix 4 — no markdown eval) =="
+# proof-gate.sh(정본 실행 로직) ↔ 문서 미러 스니펫의 마커 구간 텍스트 동등성 비교(추출·비교, 실행 아님).
+# 한쪽만 바뀌면 drift → RED. Markdown 은 어디서도 eval 하지 않는다.
+sync_check() {  # $1=marker-id, $2=doc, $3=label — 마커 구간 추출 후 텍스트 동등 비교(실행 아님)
+  local a b
+  a="$(awk "/deep-goal:$1:start/{f=1;next} /deep-goal:$1:end/{f=0} f" scripts/lib/proof-gate.sh 2>/dev/null)"
+  b="$(awk "/deep-goal:$1:start/{f=1;next} /deep-goal:$1:end/{f=0} f" "$2" 2>/dev/null)"
+  if [ -n "$a" ] && [ "$a" = "$b" ]; then ok "$3"; else bad "$3 (proof-gate.sh ↔ $2 drift)"; fi
+}
+sync_check probe skills/deep-goal-workflow/references/prep-scout.md "probe mirror ↔ proof-gate.sh in sync"
+ag skills/deep-goal-workflow/references/prep-scout.md 'deep-goal:probe:start' "prep-scout: probe mirror present"
+ag skills/deep-goal-workflow/references/prep-scout.md '(confirmed|unconfirmed)' "prep-scout: confirmed/unconfirmed labels present"
+
 echo "== changelog version entry (I4) =="
 if [ -n "${CV:-}" ]; then
   ag CHANGELOG.md "\[${CV//./\\.}\]" "CHANGELOG.md has [$CV] entry"
