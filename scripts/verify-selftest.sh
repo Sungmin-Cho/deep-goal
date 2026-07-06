@@ -5,7 +5,7 @@ set -u
 fail=0
 
 # Single trap to clean up all fixtures on exit (including Ctrl-C / abnormal termination).
-trap 'rm -f skills/.selftest-placeholder.md skills/deep-goal/.selftest-autoclaim.md /tmp/deep-goal-stub.md skills/deep-goal/.SKILL.md.selftest-bak' EXIT
+trap 'rm -f skills/.selftest-placeholder.md skills/deep-goal/.selftest-autoclaim.md /tmp/deep-goal-stub.md skills/deep-goal/.SKILL.md.selftest-bak scripts/.verify-probe.sh.selftest-bak' EXIT
 
 # (1) placeholder gate catches forbidden tokens in skills/ (an() C1 regression guard)
 # mkdir -p ensures skills/ exists even before Task 3 creates content there (harmless).
@@ -54,6 +54,37 @@ else
   fail=$((fail+1))
 fi
 rm -f skills/deep-goal/.selftest-autoclaim.md
+
+# (4) verify-probe not blind: 실 lib source(detect+classify 정상) + render 만 override 로 파손 →
+#     오직 e2e render 케이스만 FAIL. 그 특정 라벨을 grep(plan-R4 Fix 10 — probe 실패 오검 차단).
+REAL_LIB="$PWD/scripts/lib/proof-gate.sh"   # verify-selftest 는 repo 루트에서 실행(기존 관례)
+fx="$(mktemp -d "${TMPDIR:-/tmp}/deep-goal-selftest.XXXXXX")"
+cat > "$fx/proof-gate.sh" <<SH
+. "$REAL_LIB"                               # detect+classify+render 정상 로드
+render_proof_line(){ printf '%s\n' "\$2"; }    # override: render 만 파손(전 클래스 bare)
+SH
+out4="$(PROOF_GATE_LIB="$fx/proof-gate.sh" bash scripts/verify-probe.sh 2>&1)"
+if printf '%s' "$out4" | grep -q '✗ e2e: 수동 확인 ready-to-run leak'; then
+  echo "PASS: verify-probe catches broken render (e2e-specific label)"
+else
+  echo "FAIL: verify-probe blind to broken render OR wrong failure locus"; fail=$((fail+1))
+fi
+rm -rf "$fx"
+
+# (5) no-eval 가드는 설명 주석에 false-fail 안 하고 실제 eval 은 잡는다(plan-R3 Fix 6c).
+real="scripts/verify-probe.sh"; bak="scripts/.verify-probe.sh.selftest-bak"
+[ -f "$real" ] && cp "$real" "$bak"
+# 5a: 금지 토큰(eval)을 주석에만 언급 → no-eval 가드 라인은 PASS(✗ 없음)
+printf '#!/usr/bin/env bash\n# note: this script must never eval markdown sources\n. scripts/lib/proof-gate.sh\n' > "$real"
+if bash scripts/verify-plugin.sh 2>&1 | grep -qE '✗.*no eval invocation'; then
+  echo "FAIL: no-eval guard false-fails on comment mention"; fail=$((fail+1))
+else echo "PASS: no-eval guard ignores comment mention (5a)"; fi
+# 5b: 실제 eval 호출 → no-eval 가드 라인 FAIL(✗)
+printf '#!/usr/bin/env bash\neval "$UNSAFE"\n. scripts/lib/proof-gate.sh\n' > "$real"
+if bash scripts/verify-plugin.sh 2>&1 | grep -qE '✗.*no eval invocation'; then
+  echo "PASS: no-eval guard catches real eval (5b)"
+else echo "FAIL: no-eval guard blind to real eval"; fail=$((fail+1)); fi
+[ -f "$bak" ] && mv "$bak" "$real"
 
 # Trap will clean residual fixtures; report result.
 if [ "$fail" -eq 0 ]; then

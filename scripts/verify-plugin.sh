@@ -152,6 +152,18 @@ if [ -d agents ]; then bad "agents/ dir present (v1 non-goal)"; else ok "no agen
 echo "== placeholders =="
 an "skills CLAUDE.md AGENTS.md README.md README.ko.md" '(TBD|FIXME|TODO|작성 예정|fill in)' "no placeholder tokens in shipped content"
 
+echo "== release gate wiring (meta-guard) =="
+af scripts/lib/proof-gate.sh
+af scripts/verify-probe.sh
+ag package.json 'verify-probe\.sh' "package.json verify wires verify-probe.sh (release gate)"
+ag scripts/verify-probe.sh 'proof-gate\.sh' "verify-probe sources proof-gate.sh (no markdown eval — Fix 4)"
+# plan-R3 Fix 6b — no-eval 가드는 주석을 무시하고 실행 라인의 셸-토큰만 검사(설명 주석 false-fail 방지).
+no_eval_guard() {  # $1=file, $2=label. 주석 라인 제거 후 eval 셸-토큰만 금지.
+  if grep -v '^[[:space:]]*#' "$1" 2>/dev/null | grep -qE '(^|[;&|[:space:]])eval[[:space:]]'; then
+    bad "$2 (real eval invocation)"; else ok "$2"; fi
+}
+no_eval_guard scripts/verify-probe.sh "verify-probe.sh has no eval invocation (trust boundary — Fix 4/6)"
+
 echo ""
 echo "Passed: $PASS, Failed: $FAIL"
 [ "$FAIL" -eq 0 ]

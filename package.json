@@ -6,6 +6,6 @@
   "description": "Goal condition compiler for long-running autonomous work",
   "license": "MIT",
   "scripts": {
-    "verify": "bash scripts/verify-plugin.sh && bash scripts/verify-selftest.sh"
+    "verify": "bash scripts/verify-plugin.sh && bash scripts/verify-selftest.sh && bash scripts/verify-probe.sh"
   }
 }
