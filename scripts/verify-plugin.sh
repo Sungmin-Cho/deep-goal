@@ -118,6 +118,12 @@ ag skills/deep-goal-workflow/references/platform-matrix.md '독립 검증' "plat
 ag skills/deep-goal-workflow/references/recipes/robust-implementation.md 'session-receipt\.json' "robust recipe: receipt anchor path"
 ag skills/deep-goal-workflow/references/recipes/robust-implementation.md '/deep-finish' "robust recipe: /deep-finish required step"
 ag skills/deep-goal-workflow/references/recipes/robust-implementation.md '(stale|이전 세션)' "robust recipe: stale-receipt rejection clause"
+# R3 Fix 6 — Codex 레시피 계약도 receipt anchor 를 미러하는지(플랫폼 패리티). Codex 코드블록 구간 grep(awk 경계 추출).
+if [ -n "$(awk '/^### Codex/{f=1;next} f&&/^(##|---)/{exit} f&&/session-receipt\.json/{print;exit}' skills/deep-goal-workflow/references/recipes/robust-implementation.md 2>/dev/null)" ]; then
+  ok "robust recipe: Codex contract mirrors session-receipt anchor (R3 Fix 6)"
+else
+  bad "robust recipe: Codex contract mirrors session-receipt anchor (R3 Fix 6)"
+fi
 
 echo "== doc↔script mirror sync (plan-R2 Fix 4 — no markdown eval) =="
 # proof-gate.sh(정본 실행 로직) ↔ 문서 미러 스니펫의 마커 구간 텍스트 동등성 비교(추출·비교, 실행 아님).

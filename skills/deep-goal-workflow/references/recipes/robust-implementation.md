@@ -90,9 +90,11 @@ or stop after 40 turns.
 - Test Exit Gate 통과 보고됨
 - deep-review-loop(--max=3) verdict APPROVE
 - 테스트 전체 통과
+- /deep-finish 실행으로 session-receipt.json 확보 (아래 검증가능 anchor 계약)
 
 변경 금지: <불변 제약>
 검증: <테스트 커맨드> 전체 통과
+검증가능 anchor: Test 통과 후 `/deep-finish`가 emit하는 `$WORK_DIR/session-receipt.json`(producer=deep-work, artifact_kind=session-receipt, schema.name=session-receipt)을 증명으로 참조. 이 receipt가 현재 goal 세션 산출물(session/work dir 일치)이고 이전 세션 아님(stale 거부 — test_completed_at 최신성)을 진행 로그에 기록. 순수 self-report 로그보다 이 tamper-evident anchor를 우선.
 
 각 phase 전환·게이트 결과를 진행 로그에 명시 기록.
 pause 지점: Plan 승인 요청, Exit Gate 확인.
