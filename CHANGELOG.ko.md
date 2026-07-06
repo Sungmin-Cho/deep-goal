@@ -7,6 +7,26 @@
 
 ---
 
+## [1.1.0] — 2026-07-07
+
+### 추가됨
+
+- **검증가능성 게이트(proof-gate 오라클)** — probe + 5-클래스 classify→render 결정 로직의 정본을 담은 release-lint 오라클 `scripts/lib/proof-gate.sh`(런타임 미로드)를 추가. `prep-scout.md` / `condition-compiler.md`에 byte-동등 미러 스니펫을 싣고, `verify-plugin.sh`의 `sync_check`가 doc↔script 동등성을 텍스트 비교로 강제한다(Markdown은 절대 eval하지 않음 — trust boundary).
+- **confirmed vs unconfirmed probe** — `prep-scout` 2d가 manifest에서 발견한 커맨드는 `confirmed`, 파일 확장자 추정은 `unconfirmed`로 라벨링해 컴파일로 전파한다. `verify`가 probe 최상위 우선순위(verify-only 저장소는 `npm run verify`로 확정), 손상 `package.json`은 `npm test` 추정 대신 fail-loud(`parse-error`).
+- **5-클래스 검증가능성 분류기** — `classify_proof_line`이 텍스트+probe+git/파일 실측에서만 렌더 클래스를 파생한다(호출자 클래스 주입 불가): `confirmed-command` / `objective-artifact`(baseline 후손 commit SHA 또는 선언 `sha256:` digest가 실계산과 일치하는 파일) / `unconfirmed-command` / `unconfirmed-artifact`(일반 URL·bare 선재 파일·digest 불일치·baseline 자신/무관 SHA) / `subjective-placeholder`(절대 ready-to-run 아님).
+- **정상 경로 정직-표시** — unconfirmed/주관 증명 방법은 ready-to-run 대신 `⚠️ 미검증` caveat로 렌더링한다.
+- **self-report 신뢰 한계 caveat** — 컴파일러와 플랫폼 매트릭스가 Haiku 평가자는 표면화된 self-report를 독립 검증 없이 판정함을 고지하고, 고위험 goal을 검증가능 anchor(commit SHA / CI run URL / deep-work `session-receipt.json`)로 유도한다.
+- **session-receipt anchor** — `robust-implementation` 레시피가 `/deep-finish`를 필수 종료 스텝으로 만들고 `session-receipt.json` 앵커 계약(경로·envelope identity·현재-세션 바인딩·stale 거부)을 렌더링한다.
+- **`verify-probe.sh` 릴리스 게이트** — `proof-gate.sh`를 직접 source(Markdown eval 없음)하는 behavioral fixture 테스트. `npm run verify`에 3번째 스크립트로 배선하고, 배선 누락·Markdown-eval 재도입을 lint 실패로 만드는 메타-가드로 보호한다.
+
+### 변경됨
+
+- **fitness-rubric 재구성 트리거** — "증명 방법 부재"를 "부재 또는 부실"로 확장해 present-but-unverifiable 증명 방법(주관 placeholder·비실행 산문·unconfirmed 추정)을 재구성 대화로 유도한다.
+- **컴파일 절차** — presence-only "4요소 채움?" 검사를 `classify_proof_line` → `render_proof_line`로 승격.
+- **fallback SKILL.md** — self-contained 진입 스킬의 인라인 스니펫을 검증가능성 게이트 + caveat와 동기화해 약한 런타임 fallback이 구버전 규칙으로 unverifiable 조건을 출하하지 않게 한다.
+
+---
+
 ## [1.0.1] — 2026-05-27
 
 ### 수정됨
