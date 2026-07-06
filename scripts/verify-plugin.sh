@@ -83,6 +83,7 @@ ag skills/deep-goal-workflow/references/condition-compiler.md '4,?000' "compiler
 # rubric three verdicts
 ag skills/deep-goal-workflow/references/fitness-rubric.md '(반려|부적합)' "rubric has reject verdict"
 ag skills/deep-goal-workflow/references/fitness-rubric.md '재구성' "rubric has reshape verdict"
+ag skills/deep-goal-workflow/references/fitness-rubric.md '부재 또는 부실' "rubric: 재구성 trigger covers present-but-weak (부실)"
 
 echo "== workflow behavior contract (codex medium: prove the workflow exists, not just frontmatter) =="
 # All 6 workflow steps must be declared, plus the activation-template + reference-load rule.
