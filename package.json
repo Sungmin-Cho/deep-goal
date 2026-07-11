@@ -5,7 +5,12 @@
   "private": true,
   "description": "Goal condition compiler for long-running autonomous work",
   "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "verify": "bash scripts/verify-plugin.sh && bash scripts/verify-selftest.sh && bash scripts/verify-probe.sh"
+    "test": "node --test",
+    "verify:repo": "node scripts/verify-plugin.js",
+    "verify": "npm run verify:repo && npm test"
   }
 }
