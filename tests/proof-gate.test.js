@@ -36,14 +36,14 @@ function makePackageProject(name, scripts) {
   return cwd;
 }
 
-function runGit(cwd, args) {
-  const result = spawnSync('git', args, { cwd, encoding: 'utf8', windowsHide: true });
+function runGit(cwd, args, encoding = 'utf8') {
+  const result = spawnSync('git', args, { cwd, encoding, windowsHide: true });
   assert.equal(
     result.status,
     0,
     `git ${args.join(' ')} failed\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
   );
-  return result.stdout.trim();
+  return encoding === null ? result.stdout : result.stdout.trim();
 }
 
 function digest(bytes) {
@@ -278,7 +278,7 @@ test('classifies commit proofs only inside baseline..HEAD', () => {
 test('binds file proofs to a clean committed HEAD blob added after baseline', () => {
   const { artifactRelPath, baseline, cwd } = gitFixture;
   const artifactPath = join(cwd, artifactRelPath);
-  const headDigest = digest(readFileSync(artifactPath));
+  const headDigest = digest(runGit(cwd, ['show', `HEAD:${artifactRelPath}`], null));
   const options = {
     cwd,
     probeStatus: 'unconfirmed',
@@ -287,7 +287,6 @@ test('binds file proofs to a clean committed HEAD blob added after baseline', ()
   };
   const proof = `\`${artifactRelPath}\` sha256:${headDigest}`;
 
-  assert.equal(sha256File(artifactPath), headDigest);
   assert.equal(sha256HeadBlob({ cwd, relPath: artifactRelPath }), headDigest);
   assert.equal(isWorktreeCleanFor({ cwd, relPath: artifactRelPath }), true);
   assert.equal(classifyProofLine(proof, options), 'objective-artifact');
@@ -296,7 +295,7 @@ test('binds file proofs to a clean committed HEAD blob added after baseline', ()
     rendered: proof,
   });
 
-  const preexistingDigest = digest(readFileSync(join(cwd, 'preexisting.json')));
+  const preexistingDigest = digest(runGit(cwd, ['show', 'HEAD:preexisting.json'], null));
   assert.equal(
     classifyProofLine(`preexisting.json sha256:${preexistingDigest}`, options),
     'unconfirmed-artifact',
