@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
+  existsSync,
   mkdtempSync,
   mkdirSync,
+  realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -114,4 +117,43 @@ test('reports a non-Git directory without manufacturing baseline state', () => {
     command: null,
     note: null,
   });
+});
+
+test('collapses case-insensitive filesystem duplicates in discovered guides', () => {
+  const cwd = join(root, 'case fold repo with spaces');
+  mkdirSync(join(cwd, 'docs'), { recursive: true });
+  const lower = join(cwd, 'docs', 'design.md');
+  const upper = join(cwd, 'docs', 'DESIGN.md');
+  writeFileSync(lower, '# design\n');
+  if (!existsSync(upper)) writeFileSync(upper, '# DESIGN\n');
+  const canonicalize = realpathSync.native ?? realpathSync;
+  const samePhysicalFile = canonicalize(lower) === canonicalize(upper);
+
+  const { files } = scoutPrerequisites({ cwd });
+
+  assert.deepEqual(
+    files.guides,
+    samePhysicalFile ? ['docs/design.md'] : ['docs/DESIGN.md', 'docs/design.md'],
+  );
+});
+
+test('rejects known-file paths that resolve outside the project root', (context) => {
+  const cwd = join(root, 'symlink project with spaces');
+  const outside = join(root, 'outside docs with spaces');
+  mkdirSync(cwd, { recursive: true });
+  mkdirSync(outside, { recursive: true });
+  writeFileSync(join(outside, 'design.md'), '# outside\n');
+  try {
+    symlinkSync(outside, join(cwd, 'docs'), process.platform === 'win32' ? 'junction' : 'dir');
+  } catch (error) {
+    if (error?.code === 'EPERM' || error?.code === 'EACCES') {
+      context.skip(`symlink unavailable: ${error.code}`);
+      return;
+    }
+    throw error;
+  }
+
+  const { files } = scoutPrerequisites({ cwd });
+
+  assert.deepEqual(files.guides, []);
 });

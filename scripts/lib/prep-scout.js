@@ -3,8 +3,9 @@ import {
   existsSync,
   readFileSync,
   readdirSync,
+  realpathSync,
 } from 'node:fs';
-import { relative, resolve, sep } from 'node:path';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 import { detectProofCommand } from './proof-gate.js';
 
@@ -29,6 +30,7 @@ const CI_FILES = ['.gitlab-ci.yml', 'Makefile'];
 const MAKE_TARGET = /^([A-Za-z][A-Za-z0-9_-]*)\s*:/gm;
 
 const portableRelative = (root, file) => relative(root, file).split(sep).join('/');
+const canonicalize = realpathSync.native ?? realpathSync;
 
 function runGit(cwd, args) {
   return spawnSync('git', ['-C', cwd, ...args], {
@@ -44,10 +46,26 @@ function gitText(cwd, args) {
 }
 
 function discoverKnownFiles(root, names) {
-  return names
-    .map((name) => resolve(root, name))
-    .filter((file) => existsSync(file))
-    .map((file) => portableRelative(root, file));
+  const physicalRoot = canonicalize(root);
+  const seen = new Set();
+  const files = [];
+  for (const name of names) {
+    const file = resolve(root, name);
+    if (!existsSync(file)) continue;
+    let physicalFile;
+    try {
+      physicalFile = canonicalize(file);
+    } catch {
+      continue;
+    }
+    const fromRoot = relative(physicalRoot, physicalFile);
+    if (fromRoot === '..' || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) continue;
+    const identity = process.platform === 'win32' ? physicalFile.toLowerCase() : physicalFile;
+    if (seen.has(identity)) continue;
+    seen.add(identity);
+    files.push(portableRelative(root, file));
+  }
+  return files;
 }
 
 function discoverWorkflows(root) {
