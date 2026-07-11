@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 const SCRIPT_PRIORITY = ['verify', 'test', 'build', 'lint', 'typecheck', 'type-check', 'check'];
@@ -119,6 +119,42 @@ function headBlob({ cwd, relPath }) {
   return result.stdout;
 }
 
+function headBlobOid({ cwd, relPath }) {
+  if (typeof relPath !== 'string' || relPath.length === 0) return null;
+  const oid = gitText(cwd, [
+    'rev-parse',
+    '--verify',
+    '--quiet',
+    `HEAD:${portableGitPath(relPath)}`,
+  ]);
+  return typeof oid === 'string' && /^[0-9a-f]{40,64}$/.test(oid) ? oid : null;
+}
+
+function filteredWorktreeOid({ cwd, relPath }) {
+  let physicalRoot;
+  let physicalFile;
+  try {
+    physicalRoot = canonicalize(cwd);
+    const candidate = resolve(cwd, relPath);
+    const stat = lstatSync(candidate);
+    if (!stat.isFile() || stat.isSymbolicLink()) return null;
+    physicalFile = containedExistingPath(physicalRoot, candidate);
+  } catch {
+    return null;
+  }
+  if (physicalFile === null) return null;
+
+  const result = runGit(cwd, [
+    'hash-object',
+    `--path=${portableGitPath(relPath)}`,
+    '--',
+    physicalFile,
+  ]);
+  if (result.status !== 0) return null;
+  const oid = result.stdout.trim();
+  return /^[0-9a-f]{40,64}$/.test(oid) ? oid : null;
+}
+
 export function sha256HeadBlob({ cwd, relPath }) {
   const blob = headBlob({ cwd, relPath });
   if (blob === null) return null;
@@ -126,13 +162,34 @@ export function sha256HeadBlob({ cwd, relPath }) {
 }
 
 export function isWorktreeCleanFor({ cwd, relPath }) {
-  const blob = headBlob({ cwd, relPath });
-  if (blob === null) return false;
-  try {
-    return readFileSync(resolve(cwd, relPath)).equals(blob);
-  } catch {
-    return false;
-  }
+  const committedOid = headBlobOid({ cwd, relPath });
+  if (committedOid === null) return false;
+
+  const worktreeOid = filteredWorktreeOid({ cwd, relPath });
+  if (worktreeOid === null || worktreeOid !== committedOid) return false;
+
+  const portablePath = portableGitPath(relPath);
+  const unstaged = runGit(cwd, [
+    'diff',
+    '--quiet',
+    '--no-ext-diff',
+    '--no-textconv',
+    '--',
+    portablePath,
+  ]);
+  if (unstaged.status !== 0) return false;
+
+  const staged = runGit(cwd, [
+    'diff',
+    '--cached',
+    '--quiet',
+    '--no-ext-diff',
+    '--no-textconv',
+    'HEAD',
+    '--',
+    portablePath,
+  ]);
+  return staged.status === 0;
 }
 
 function resolveCommit(cwd, ref) {

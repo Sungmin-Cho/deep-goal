@@ -44,6 +44,18 @@ function copyFixture(t) {
   return root;
 }
 
+function skillFiles(root) {
+  const skillsRoot = join(root, 'skills');
+  return readdirSync(skillsRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
+    .map((entry) => join(skillsRoot, entry.name, 'SKILL.md'));
+}
+
+function rewriteLineEndings(file, eol) {
+  const source = readFileSync(file, 'utf8');
+  writeFileSync(file, source.replace(/\r?\n/g, eol));
+}
+
 function nonEmpty(value) {
   return typeof value === 'string' && value.trim() !== '';
 }
@@ -104,11 +116,18 @@ function assertAssetInsideRoot(root, rawPath, label) {
 
 function assertSkillFrontmatter(file) {
   const source = readFileSync(file, 'utf8');
-  assert.match(source, /^---\n[\s\S]*?\n---(?:\n|$)/, `${file} must have closed frontmatter`);
-  const frontmatter = source.slice(4, source.indexOf('\n---', 4));
-  assert.match(frontmatter, /^name:\s*\S.+$/m, `${file} frontmatter needs a name`);
-  assert.match(frontmatter, /^description:\s*\S.+$/m, `${file} frontmatter needs a description`);
-  assert.doesNotMatch(frontmatter, /^disable(?:-|_)model(?:-|_)invocation:\s*(?!false\s*$)/m,
+  const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(source);
+  assert.ok(match !== null, `${file} must have closed frontmatter`);
+  const frontmatter = match[1];
+  assert.match(frontmatter, /^name:[ \t]*\S[^\r\n]*\r?$/m, `${file} frontmatter needs a name`);
+  assert.match(
+    frontmatter,
+    /^description:[ \t]*\S[^\r\n]*\r?$/m,
+    `${file} frontmatter needs a description`,
+  );
+  assert.doesNotMatch(
+    frontmatter,
+    /^disable(?:-|_)model(?:-|_)invocation:[ \t]*(?!false[ \t]*\r?$)[^\r\n]*\r?$/m,
     `${file} may only disable model invocation with false`);
 }
 
@@ -190,6 +209,58 @@ export function assertCodexPluginContract(root) {
 
 test('current repository satisfies the pinned Codex plugin contract', () => {
   assertCodexPluginContract(REPOSITORY_ROOT);
+});
+
+test('contract pin accepts LF and CRLF skill frontmatter', (t) => {
+  for (const [label, eol] of [['LF', '\n'], ['CRLF', '\r\n']]) {
+    const root = copyFixture(t);
+    for (const file of skillFiles(root)) rewriteLineEndings(file, eol);
+    assert.doesNotThrow(() => assertCodexPluginContract(root), label);
+  }
+});
+
+test('contract pin rejects malformed CRLF skill frontmatter', (t) => {
+  const unclosedRoot = copyFixture(t);
+  const unclosedFile = join(unclosedRoot, 'skills/deep-goal/SKILL.md');
+  rewriteLineEndings(unclosedFile, '\r\n');
+  writeFileSync(
+    unclosedFile,
+    readFileSync(unclosedFile, 'utf8').replace(
+      /\r\n---(?=\r\n|$)/g,
+      '\r\nnot-a-closing-fence',
+    ),
+  );
+  assert.throws(() => assertCodexPluginContract(unclosedRoot), /must have closed frontmatter/);
+
+  const missingDescriptionRoot = copyFixture(t);
+  const missingDescriptionFile = join(missingDescriptionRoot, 'skills/deep-goal/SKILL.md');
+  rewriteLineEndings(missingDescriptionFile, '\r\n');
+  writeFileSync(
+    missingDescriptionFile,
+    readFileSync(missingDescriptionFile, 'utf8').replace(
+      /^description:[^\r\n]*\r?$/m,
+      'description:',
+    ),
+  );
+  assert.throws(
+    () => assertCodexPluginContract(missingDescriptionRoot),
+    /frontmatter needs a description/,
+  );
+
+  const forbiddenInvocationRoot = copyFixture(t);
+  const forbiddenInvocationFile = join(forbiddenInvocationRoot, 'skills/deep-goal/SKILL.md');
+  rewriteLineEndings(forbiddenInvocationFile, '\r\n');
+  writeFileSync(
+    forbiddenInvocationFile,
+    readFileSync(forbiddenInvocationFile, 'utf8').replace(
+      '\r\n---\r\n',
+      '\r\ndisable-model-invocation: true\r\n---\r\n',
+    ),
+  );
+  assert.throws(
+    () => assertCodexPluginContract(forbiddenInvocationRoot),
+    /may only disable model invocation with false/,
+  );
 });
 
 test('fixture-only non-semver mutation proves the contract pin is red', (t) => {

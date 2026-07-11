@@ -10,7 +10,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { after, test } from 'node:test';
 
 import {
@@ -335,6 +335,71 @@ test('binds file proofs to a clean committed HEAD blob added after baseline', ()
   writeFileSync(artifactPath, '{"after":"dirty mutation"}\n');
   assert.equal(sha256HeadBlob({ cwd, relPath: artifactRelPath }), headDigest);
   assert.notEqual(sha256File(artifactPath), headDigest);
+  assert.equal(isWorktreeCleanFor({ cwd, relPath: artifactRelPath }), false);
+  assert.equal(classifyProofLine(proof, options), 'unconfirmed-artifact');
+});
+
+test('uses Git clean filters for core.autocrlf while rejecting real edits', (context) => {
+  const cwd = join(root, 'autocrlf clean-filter fixture');
+  mkdirSync(cwd, { recursive: true });
+  runGit(cwd, ['init', '--quiet']);
+  runGit(cwd, ['config', 'user.email', 'deep-goal@example.test']);
+  runGit(cwd, ['config', 'user.name', 'Deep Goal Test']);
+  runGit(cwd, ['config', 'core.autocrlf', 'true']);
+
+  writeFileSync(join(cwd, 'baseline.json'), '{"baseline":true}\n');
+  runGit(cwd, ['add', 'baseline.json']);
+  runGit(cwd, ['commit', '--quiet', '-m', 'baseline']);
+  const baseline = runGit(cwd, ['rev-parse', 'HEAD']);
+
+  const artifactRelPath = 'filtered artifact with spaces.json';
+  const artifactPath = join(cwd, artifactRelPath);
+  writeFileSync(artifactPath, '{"after":true}\n');
+  runGit(cwd, ['add', artifactRelPath]);
+  runGit(cwd, ['commit', '--quiet', '-m', 'add filtered artifact']);
+
+  rmSync(artifactPath);
+  runGit(cwd, ['checkout', '--', artifactRelPath]);
+
+  const headDigest = sha256HeadBlob({ cwd, relPath: artifactRelPath });
+  assert.match(headDigest, /^[0-9a-f]{64}$/);
+  assert.notEqual(sha256File(artifactPath), headDigest, 'checkout must exercise CRLF smudging');
+  assert.equal(runGit(cwd, ['status', '--porcelain', '--', artifactRelPath]), '');
+
+  const options = {
+    cwd,
+    probeStatus: 'unconfirmed',
+    detectedCommand: null,
+    baselineHead: baseline,
+  };
+  const proof = `\`${artifactRelPath}\` sha256:${headDigest}`;
+  assert.equal(isWorktreeCleanFor({ cwd, relPath: artifactRelPath }), true);
+  assert.equal(classifyProofLine(proof, options), 'objective-artifact');
+
+  writeFileSync(artifactPath, '{"after":"dirty mutation"}\r\n');
+  assert.notEqual(runGit(cwd, ['status', '--porcelain', '--', artifactRelPath]), '');
+  assert.equal(isWorktreeCleanFor({ cwd, relPath: artifactRelPath }), false);
+  assert.equal(classifyProofLine(proof, options), 'unconfirmed-artifact');
+
+  runGit(cwd, ['restore', '--source=HEAD', '--staged', '--worktree', '--', artifactRelPath]);
+  const escapeRelPath = join('..', 'outside filtered artifact.json');
+  const escapePath = resolve(cwd, escapeRelPath);
+  writeFileSync(escapePath, '{"after":true}\n');
+  const escapeProof = `\`${escapeRelPath}\` sha256:${headDigest}`;
+  assert.equal(isWorktreeCleanFor({ cwd, relPath: escapeRelPath }), false);
+  assert.equal(classifyProofLine(escapeProof, options), 'unconfirmed-artifact');
+
+  rmSync(artifactPath);
+  try {
+    symlinkSync(escapePath, artifactPath, 'file');
+  } catch (error) {
+    if (error?.code === 'EPERM' || error?.code === 'EACCES' || error?.code === 'ENOTSUP') {
+      context.diagnostic(`file symlink unavailable: ${error.code}`);
+      return;
+    }
+    throw error;
+  }
+  assert.equal(sha256File(artifactPath), headDigest, 'symlink target mirrors committed bytes');
   assert.equal(isWorktreeCleanFor({ cwd, relPath: artifactRelPath }), false);
   assert.equal(classifyProofLine(proof, options), 'unconfirmed-artifact');
 });
