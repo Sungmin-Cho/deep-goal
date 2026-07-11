@@ -37,7 +37,9 @@ function runGit(cwd, args) {
 }
 
 function makeRepository() {
-  const cwd = join(root, 'repository with spaces');
+  const cwd = join(root, '저장소 repository with spaces');
+  const sentinel = join(cwd, 'make evaluation 감지 sentinel.txt');
+  const workflowName = '검증 ci.yml';
   mkdirSync(join(cwd, '.github', 'workflows'), { recursive: true });
   writeFileSync(join(cwd, 'AGENTS.md'), '# Repository guide\n');
   writeFileSync(
@@ -45,7 +47,7 @@ function makeRepository() {
     JSON.stringify({ name: 'scout-fixture', scripts: { verify: 'node --test' } }),
   );
   writeFileSync(
-    join(cwd, '.github', 'workflows', 'ci.yml'),
+    join(cwd, '.github', 'workflows', workflowName),
     'name: ci\non: [push]\njobs: {}\n',
   );
   writeFileSync(
@@ -53,7 +55,7 @@ function makeRepository() {
     [
       'harmless:',
       '\t@echo harmless',
-      'DANGER := $(shell exit 91)',
+      `DANGER := $(shell "${process.execPath}" -e "require('node:fs').writeFileSync(process.argv[1], 'evaluated')" "${sentinel}")`,
       'verify:',
       '\t@echo verify',
       '',
@@ -70,13 +72,17 @@ function makeRepository() {
     branch: runGit(cwd, ['branch', '--show-current']),
     cwd,
     head: runGit(cwd, ['rev-parse', 'HEAD']),
+    sentinel,
+    workflowName,
   };
 }
 
 const repository = makeRepository();
 
 test('scouts known files, proof metadata, Git baseline, and Make targets without execution', () => {
+  assert.equal(existsSync(repository.sentinel), false);
   const result = scoutPrerequisites({ cwd: repository.cwd });
+  assert.equal(existsSync(repository.sentinel), false);
 
   assert.deepEqual(
     Object.keys(result).sort(),
@@ -96,7 +102,7 @@ test('scouts known files, proof metadata, Git baseline, and Make targets without
   assert.deepEqual(result.files, {
     guides: ['AGENTS.md'],
     dependencies: ['package.json'],
-    ci: ['.github/workflows/ci.yml', 'Makefile'],
+    ci: [`.github/workflows/${repository.workflowName}`, 'Makefile'],
   });
   assert.deepEqual(result.makeTargets, ['harmless', 'verify']);
 });
