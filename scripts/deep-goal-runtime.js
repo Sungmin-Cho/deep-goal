@@ -1,4 +1,4 @@
-import { accessSync, constants, statSync } from 'node:fs';
+import { readdirSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import {
@@ -55,11 +55,15 @@ function parseArguments(argv) {
   return { command, options };
 }
 
+function preflightDirectory(cwd) {
+  if (!statSync(cwd).isDirectory()) throw new Error(`cwd is not a directory: ${cwd}`);
+  readdirSync(cwd);
+}
+
 function run(argv) {
   const { command, options } = parseArguments(argv);
   const cwd = resolve(options['--cwd']);
-  if (!statSync(cwd).isDirectory()) throw new Error(`cwd is not a directory: ${cwd}`);
-  accessSync(cwd, constants.R_OK | constants.X_OK);
+  preflightDirectory(cwd);
   if (command === 'scout') return scoutPrerequisites({ cwd });
 
   let detected = null;

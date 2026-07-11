@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
   existsSync,
+  linkSync,
   mkdtempSync,
   mkdirSync,
-  realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -77,6 +78,17 @@ function makeRepository() {
   };
 }
 
+function physicalIdentity(file) {
+  const { dev, ino } = statSync(file, { bigint: true });
+  assert.equal(typeof dev, 'bigint');
+  assert.equal(typeof ino, 'bigint');
+  return { dev, ino };
+}
+
+function supportsInodeIdentity(identity) {
+  return identity.ino !== 0n;
+}
+
 const repository = makeRepository();
 
 test('scouts known files, proof metadata, Git baseline, and Make targets without execution', () => {
@@ -125,22 +137,78 @@ test('reports a non-Git directory without manufacturing baseline state', () => {
   });
 });
 
-test('collapses case-insensitive filesystem duplicates in discovered guides', () => {
-  const cwd = join(root, 'case fold repo with spaces');
+test('keeps distinct case-sensitive guide files as separate physical files', (context) => {
+  const cwd = join(root, 'case-sensitive guides with spaces');
   mkdirSync(join(cwd, 'docs'), { recursive: true });
   const lower = join(cwd, 'docs', 'design.md');
   const upper = join(cwd, 'docs', 'DESIGN.md');
   writeFileSync(lower, '# design\n');
-  if (!existsSync(upper)) writeFileSync(upper, '# DESIGN\n');
-  const canonicalize = realpathSync.native ?? realpathSync;
-  const samePhysicalFile = canonicalize(lower) === canonicalize(upper);
+  writeFileSync(upper, '# DESIGN\n');
+  const lowerIdentity = physicalIdentity(lower);
+  const upperIdentity = physicalIdentity(upper);
+  if (!supportsInodeIdentity(lowerIdentity) || !supportsInodeIdentity(upperIdentity)) {
+    context.skip('filesystem does not expose reliable inode identities');
+    return;
+  }
+  if (lowerIdentity.dev === upperIdentity.dev && lowerIdentity.ino === upperIdentity.ino) {
+    context.skip('filesystem is case-insensitive');
+    return;
+  }
 
   const { files } = scoutPrerequisites({ cwd });
 
-  assert.deepEqual(
-    files.guides,
-    samePhysicalFile ? ['docs/design.md'] : ['docs/DESIGN.md', 'docs/design.md'],
-  );
+  assert.deepEqual(files.guides, ['docs/DESIGN.md', 'docs/design.md']);
+});
+
+test('deduplicates hard-linked known files by physical file identity', (context) => {
+  const cwd = join(root, 'hard-linked guides with spaces');
+  mkdirSync(cwd, { recursive: true });
+  const lower = join(cwd, 'package.json');
+  const upper = join(cwd, 'requirements.txt');
+  writeFileSync(lower, '{"name":"hard-link-fixture"}\n');
+  try {
+    linkSync(lower, upper);
+  } catch (error) {
+    if (['EACCES', 'EEXIST', 'EPERM', 'ENOSYS'].includes(error?.code)) {
+      context.skip(`hard-link fixture unavailable: ${error.code}`);
+      return;
+    }
+    throw error;
+  }
+  const lowerIdentity = physicalIdentity(lower);
+  const upperIdentity = physicalIdentity(upper);
+  if (!supportsInodeIdentity(lowerIdentity) || !supportsInodeIdentity(upperIdentity)) {
+    context.skip('filesystem does not expose reliable inode identities');
+    return;
+  }
+  assert.deepEqual(lowerIdentity, upperIdentity);
+
+  const { files } = scoutPrerequisites({ cwd });
+
+  assert.deepEqual(files.dependencies, ['package.json']);
+});
+
+test('deduplicates normal case-insensitive guide spellings by physical identity', (context) => {
+  const cwd = join(root, 'case-insensitive guides with spaces');
+  mkdirSync(join(cwd, 'docs'), { recursive: true });
+  const lower = join(cwd, 'docs', 'design.md');
+  const upper = join(cwd, 'docs', 'DESIGN.md');
+  writeFileSync(lower, '# design\n');
+  if (!existsSync(upper)) {
+    context.skip('filesystem is case-sensitive');
+    return;
+  }
+  const lowerIdentity = physicalIdentity(lower);
+  const upperIdentity = physicalIdentity(upper);
+  if (!supportsInodeIdentity(lowerIdentity) || !supportsInodeIdentity(upperIdentity)) {
+    context.skip('filesystem does not expose reliable inode identities');
+    return;
+  }
+  assert.deepEqual(lowerIdentity, upperIdentity);
+
+  const { files } = scoutPrerequisites({ cwd });
+
+  assert.deepEqual(files.guides, ['docs/design.md']);
 });
 
 test('rejects known-file paths that resolve outside the project root', (context) => {
@@ -162,4 +230,26 @@ test('rejects known-file paths that resolve outside the project root', (context)
   const { files } = scoutPrerequisites({ cwd });
 
   assert.deepEqual(files.guides, []);
+});
+
+test('rejects a workflow directory link that resolves outside the project root', (context) => {
+  const cwd = join(root, 'workflow link project with spaces');
+  const outside = join(root, 'outside workflows with spaces');
+  const workflowRoot = join(cwd, '.github', 'workflows');
+  mkdirSync(join(cwd, '.github'), { recursive: true });
+  mkdirSync(outside, { recursive: true });
+  writeFileSync(join(outside, 'external.yml'), 'name: external\n');
+  try {
+    symlinkSync(outside, workflowRoot, process.platform === 'win32' ? 'junction' : 'dir');
+  } catch (error) {
+    if (error?.code === 'EPERM' || error?.code === 'EACCES') {
+      context.skip(`symlink unavailable: ${error.code}`);
+      return;
+    }
+    throw error;
+  }
+
+  const { files } = scoutPrerequisites({ cwd });
+
+  assert.deepEqual(files.ci, []);
 });

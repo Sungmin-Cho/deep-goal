@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
+  chmodSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -171,6 +173,53 @@ test('evaluate-proof rejects a missing cwd with or without explicit probe fields
     assert.equal(result.status, 1, result.stderr);
     assert.equal(result.stdout, '');
     assert.match(result.stderr, /^deep-goal-runtime: operational error:/);
+  }
+});
+
+test('directory preflight reads the cwd before either CLI command runs', () => {
+  const source = readFileSync(CLI, 'utf8');
+
+  assert.match(
+    source,
+    /function preflightDirectory\(cwd\) \{[\s\S]*?statSync\(cwd\)\.isDirectory\(\)[\s\S]*?readdirSync\(cwd\);[\s\S]*?\}/,
+  );
+  assert.match(
+    source,
+    /const cwd = resolve\(options\['--cwd'\]\);\s+preflightDirectory\(cwd\);\s+if \(command === 'scout'\)/,
+  );
+});
+
+test('evaluate-proof returns an operational error for a POSIX unreadable cwd with explicit probes', (context) => {
+  if (process.platform === 'win32') {
+    context.skip('POSIX permission fixture');
+    return;
+  }
+  const cwd = join(root, 'unreadable project with spaces');
+  mkdirSync(cwd, { recursive: true });
+  chmodSync(cwd, 0o000);
+  try {
+    try {
+      readdirSync(cwd);
+    } catch {
+      const result = runCli([
+        'evaluate-proof',
+        '--cwd',
+        cwd,
+        '--text',
+        'npm test',
+        '--probe-status',
+        'confirmed',
+        '--detected-command',
+        'npm test',
+      ]);
+      assert.equal(result.status, 1, result.stderr);
+      assert.equal(result.stdout, '');
+      assert.match(result.stderr, /^deep-goal-runtime: operational error:/);
+      return;
+    }
+    context.skip('fixture remains readable under the current privilege');
+  } finally {
+    chmodSync(cwd, 0o755);
   }
 });
 
