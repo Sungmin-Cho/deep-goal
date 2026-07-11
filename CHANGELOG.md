@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] — 2026-07-11
+
+### Added
+
+- Native Windows 11 and Node.js 22 support for prerequisite scouting, proof evaluation, and release verification, with Ubuntu/macOS/Windows CI coverage.
+
+### Changed
+
+- Claude Code and Codex entries now converge on the same shell-free workflow and fail-closed proof contract.
+
+### Removed
+
+- Git Bash and POSIX utility requirements from supported verification and goal-compilation paths.
+
+---
+
 ## [1.1.0] — 2026-07-07
 
 ### Added

@@ -1,166 +1,115 @@
 # deep-goal — Project Guide for Claude
 
-Goal condition compiler that evaluates long-running task requests, reshapes them to fit, scouts prerequisites, and compiles ready-to-paste native `/goal` conditions for Claude Code and Codex.
+Goal condition compiler that evaluates long-running requests, reshapes them, scouts prerequisites,
+and compiles ready-to-paste native `/goal` conditions for Claude Code and Codex.
 
-For detailed version history see [`CHANGELOG.md`](CHANGELOG.md) / [`CHANGELOG.ko.md`](CHANGELOG.ko.md). This file is intentionally short — it holds the overview, structure, and drift-resistant conventions only.
+For release history see [`CHANGELOG.md`](CHANGELOG.md) and
+[`CHANGELOG.ko.md`](CHANGELOG.ko.md). Check the current version with:
 
-To check the current version: `jq -r .version .claude-plugin/plugin.json`
-
-> 📄 **Docs maintenance**: this repo's documentation follows `docs/DOCS_RULE.md` (local maintainer guide — single-source-of-truth rules for README / CHANGELOG / this file).
-
----
-
-## Project Overview
-
-**deep-goal** is a [Claude Code](https://docs.anthropic.com/en/docs/claude-code) / Codex plugin that acts as a **meta-Guide**: it evaluates whether a long-running task request is a good fit for the native `/goal` feature, reshapes requests that need adjustment, scouts prerequisites in the codebase, and compiles a platform-tailored `/goal` condition the user copies and pastes to activate.
-
-**Identity**: deep-goal is the "orchestration on-ramp" of the deep-suite — it consumes the entry points of sibling plugins (deep-work, deep-review, deep-evolve, deep-docs, deep-wiki) and emits `PLAN.md` + `/goal` conditions. Three synergy recipes encode the most common multi-plugin compositions.
-
-**Key constraint (non-negotiable)**: Native `/goal` cannot be invoked programmatically by a plugin. deep-goal's role ends at presenting the compiled condition; the user triggers activation.
-
-**No runtime artifacts**: No `agents/`, `hooks/`, persistent state files, or caches. One-shot compilation; all work is content + skills.
-
-**Marketplace presence**: Part of the [claude-deep-suite](https://github.com/Sungmin-Cho/claude-deep-suite) marketplace.
-
----
-
-## 🚨 CRITICAL — Plugin Update Workflow
-
-**Every deep-goal release must be accompanied by the following work. No exceptions.**
-
-### 1. Sync the deep-suite marketplace (required)
-
-Update the following in `/Users/sungmin/Dev/claude-plugins/deep-suite/`:
-
-- **`.claude-plugin/marketplace.json`** and **`.agents/plugins/marketplace.json`** — under the `deep-goal` entry: `sha` = full 40-character merge commit hash on the new `main`; description = one-line headline summary.
-- **`README.md`** / **`README.ko.md`** — the `deep-goal` row in the Plugins table and any narrative sections that reference the version.
-
-After editing:
-```bash
-cd /Users/sungmin/Dev/claude-plugins/deep-suite
-git add .claude-plugin/marketplace.json .agents/plugins/marketplace.json README.md README.ko.md
-git commit -m "chore: bump deep-goal to vX.Y.Z — <one-line summary>"
-git push
+```text
+node -e "const p=JSON.parse(require('node:fs').readFileSync('.claude-plugin/plugin.json','utf8')); console.log(p.version)"
 ```
 
-### 2. Version triple-sync (required)
+> 📄 **Docs maintenance**: this repository follows `docs/DOCS_RULE.md`, the local maintainer
+> source of truth for README, CHANGELOG, CLAUDE.md, and AGENTS.md synchronization.
 
-Bump the version in all three manifests together — they must always match:
-- `.claude-plugin/plugin.json`
-- `.codex-plugin/plugin.json`
-- `package.json`
+## Project overview
 
-`npm run verify` enforces this with a grep check; a mismatch causes `exit=1`.
+deep-goal is the Deep Suite orchestration on-ramp. It consumes sibling plugin entry points and emits
+`PLAN.md` plus a native `/goal` condition. The user activates the condition; a plugin cannot invoke
+native `/goal` programmatically.
 
-### 3. Update CHANGELOG (both languages, required)
+Node.js 22 powers the shared `scout`, `evaluate-proof`, and release-verification surfaces. Linux,
+macOS, and native Windows 11 are supported without Git Bash. Claude Code uses `/deep-goal`; Codex
+uses `$deep-goal:deep-goal`; Codex is never instructed to call Claude's `Skill({...})` API.
 
-- Add a new version entry to both `CHANGELOG.md` and `CHANGELOG.ko.md` using [Keep a Changelog](https://keepachangelog.com/) format.
-- **Do NOT inline release notes in this CLAUDE.md** — CHANGELOG is the single source of truth.
+**Content-only boundary**: ship no `hooks/`, no `agents/`, no `.mcp.json`, and no manifest MCP
+server. The plugin creates no persistent state directories or caches.
 
----
+## 🚨 Critical plugin update workflow
 
-## Directory Structure
+Every release requires all of the following:
 
-```
+1. **Version triple-sync** — update `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`, and
+   `package.json` together.
+2. **Bilingual CHANGELOG** — add matching Keep a Changelog sections to `CHANGELOG.md` and
+   `CHANGELOG.ko.md`. Keep release notes there; do not duplicate them in this guide.
+3. **Post-merge suite sync** — after obtaining the full 40-character main commit SHA, update the
+   deep-goal entries in both suite marketplaces:
+   - `/Users/sungmin/Dev/claude-plugins/deep-suite/.claude-plugin/marketplace.json`
+   - `/Users/sungmin/Dev/claude-plugins/deep-suite/.agents/plugins/marketplace.json`
+4. Update the suite `README.md` and `README.ko.md` deep-goal rows and any version narrative.
+
+## Directory structure
+
+```text
 deep-goal/
-├── .claude-plugin/plugin.json          # Claude Code manifest
-├── .codex-plugin/plugin.json           # Codex manifest (skills + interface)
-├── package.json                         # type: module, npm verify script
+├── .claude-plugin/plugin.json
+├── .codex-plugin/plugin.json
+├── package.json
 ├── scripts/
-│   ├── verify-plugin.sh                # grep-based release-lint (positive checks)
-│   └── verify-selftest.sh              # negative self-test (meta-verification)
+│   ├── deep-goal-runtime.js
+│   ├── verify-plugin.js
+│   └── lib/
+│       ├── prep-scout.js
+│       ├── proof-gate.js
+│       └── release-validator.js
 ├── skills/
-│   ├── deep-goal/
-│   │   └── SKILL.md                    # thin user entry (user-invocable: true), self-contained
+│   ├── deep-goal/SKILL.md
 │   └── deep-goal-workflow/
-│       ├── SKILL.md                    # core 6-step workflow (auto-loaded, user-invocable: false)
+│       ├── SKILL.md
 │       └── references/
-│           ├── fitness-rubric.md       # goal fitness judgment criteria
-│           ├── condition-compiler.md   # 4 elements + evaluator-surfacing rule
-│           ├── platform-matrix.md      # Claude vs Codex branch table
-│           ├── prep-scout.md           # prerequisite scouting procedure
-│           └── recipes/
-│               ├── README.md           # recipe index + plugin detection rules
-│               ├── robust-implementation.md
-│               ├── autonomous-evolution.md
-│               └── ship-and-document.md
+├── tests/
+│   └── *.test.js
 ├── CLAUDE.md / AGENTS.md
 ├── README.md / README.ko.md
 └── CHANGELOG.md / CHANGELOG.ko.md
 ```
 
----
+## Key concepts
 
-## Key Concepts
+### Activation model
 
-### Activation model (non-negotiable)
+deep-goal evaluates, reshapes, compiles, and **presents**. The user copies the condition and invokes
+`/goal <condition>` manually, preserving the platform's native UI, evaluator, resume behavior, and
+auto-clear semantics.
 
-Native `/goal` **cannot be auto-invoked** by a plugin or skill. The Claude Code Agent SDK dispatch list covers `/compact`, `/clear`, `/context`, `/usage` — `/goal` is excluded. Agent output containing `/goal` text is treated as plain text, not a command.
+### Four compile elements
 
-deep-goal's role: evaluate → reshape → compile → **present**. The user copies the condition and triggers `/goal <condition>` manually. Activation friction is minimized to a one-line copy-paste.
+Every condition includes a measurable end-state, proof method, invariant constraints, and a concrete
+upper bound. Claude conditions additionally tell the evaluator-facing agent to report each gate result
+in the conversation; Codex conditions use checkpoints and the same proof classes.
 
-### The 4 compile elements
+### Shared portable workflow
 
-Every compiled `/goal` condition must contain:
-1. **Measurable end-state** — test result, build exit code, file count, empty queue, etc.
-2. **Proof method** — the command or artifact that demonstrates completion
-3. **Invariant constraints** — what must not change along the way
-4. **Upper bound** — turn or time limit (`or stop after N turns`)
+Both hosts derive the installed plugin root from the loaded skill path and invoke the same absolute
+Node runtime with separate arguments. `scout.git.baselineHead` stays in current-request memory and is
+forwarded unchanged to `evaluate-proof`. Missing runtime access or a null/non-Git baseline remains
+fail-closed and unverified, never ready-to-run.
 
-### Evaluator surfacing rule (Claude-specific)
+## Verification
 
-The Claude `/goal` evaluator (Haiku by default) **cannot call tools** — it judges only from output Claude has already surfaced to the conversation. Therefore every compiled condition must instruct Claude to "report each step result explicitly in the conversation." Without this instruction, the evaluator cannot determine completion.
+Node.js 22 is required. The same commands run on Linux, macOS, and native Windows 11 with no
+requirement for Git Bash:
 
-### Synergy recipes
-
-Three knowledge documents in `references/recipes/` encode multi-plugin compositions:
-- **robust-implementation** — deep-work + deep-review: phased implementation with approval gates and review-loop APPROVE verdict
-- **autonomous-evolution** — deep-evolve: fitness-metric-driven experiment loop until target reached
-- **ship-and-document** — deep-docs + deep-wiki: post-implementation docs gardening + wiki ingest (with optional review gate before persistent operations)
-
-Recipes are applied only when the relevant sibling plugins are detected. Unmatched requests fall back to single-shot goal.
-
----
-
-## Slash commands
-
-| Command | Description |
-|---|---|
-| `/deep-goal <task>` | Evaluate and compile a long-running task into a `/goal` condition |
-| `/deep-goal` (no args) | Interactive entry — asks "What do you want to run to completion?" |
-
-Codex user entry: `$deep-goal:deep-goal <task>`
-
----
-
-## Tests
-
-```bash
+```text
+npm test
 npm run verify
-# = bash scripts/verify-plugin.sh && bash scripts/verify-selftest.sh
 ```
 
-- **`verify-plugin.sh`**: grep-based release-lint (positive checks — file existence, frontmatter, content invariants, version sync, CHANGELOG entry, no placeholder tokens).
-- **`verify-selftest.sh`**: negative self-test — confirms that `verify-plugin.sh` actually catches violations (placeholder gate, multi-element self-containment check, activation invariant reversal). Prevents silent checker rot.
+`npm test` runs `node --test`. `npm run verify` invokes `node scripts/verify-plugin.js`, which uses
+`scripts/lib/release-validator.js`, and then executes the full Node test surface. Both must pass before
+every release.
 
-Both must pass before every release (`verify-selftest.sh` reports `ALL-PASS`).
-
----
+The current installed Codex Python validator remains a maintainer-local authoritative preflight. CI
+uses the pinned Node Codex contract because the user-specific validator path is not part of a generic
+runner.
 
 ## Related repositories
 
-- **deep-suite (marketplace)**: https://github.com/Sungmin-Cho/claude-deep-suite — `/Users/sungmin/Dev/claude-plugins/deep-suite`
+- **deep-suite**: https://github.com/Sungmin-Cho/claude-deep-suite
 - **deep-work**: https://github.com/Sungmin-Cho/claude-deep-work
 - **deep-review**: https://github.com/Sungmin-Cho/claude-deep-review
 - **deep-evolve**: https://github.com/Sungmin-Cho/claude-deep-evolve
 - **deep-docs**: https://github.com/Sungmin-Cho/claude-deep-docs
 - **deep-wiki**: https://github.com/Sungmin-Cho/claude-deep-wiki
-- **deep-dashboard**: https://github.com/Sungmin-Cho/claude-deep-dashboard
-
----
-
-**Reminder**: This CLAUDE.md is intentionally kept short. For every new release:
-
-1. **Write the details in CHANGELOG** (not here — prevents drift)
-2. **Only update Key Concepts** if a core rule (activation model, 4 elements, evaluator constraint) actually changes
-3. **Sync the deep-suite marketplace** (see the "CRITICAL" section above)

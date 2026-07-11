@@ -14,7 +14,7 @@ deep-goal은 사용자의 장기 작업 요청을 받아 (1) goal 기능에 적�
 
 ---
 
-## References 로드 규칙 (플랫폼 중립)
+## References 로드 규칙과 공통 runtime
 
 이 workflow는 다음 references를 사용한다:
 - `references/fitness-rubric.md` — goal 적합성 판정 기준
@@ -23,17 +23,49 @@ deep-goal은 사용자의 장기 작업 요청을 받아 (1) goal 기능에 적�
 - `references/prep-scout.md` — 사전 준비물 탐색 절차
 - `references/recipes/` — 시너지 레시피 라이브러리
 
-**로드 우선순위 (플랫폼별):**
+workflow는 entry가 이미 로드한 상태에서 실행되므로 자기 자신을 다시 로드하지 않는다.
 
-(a) **Claude Code**: description 매칭으로 자동 로드된다 (기본 동작).
+<!-- deep-goal:claude:start -->
+### Claude Code reference 경로
 
-(b) **자동 로드가 약한 런타임 (Codex / Copilot / Gemini)**: `Skill({ skill: "deep-goal:deep-goal-workflow" })` 명시 호출로 로드한다.
+workflow의 `references/` children은 description routing으로 로드한다. 특정 reference가 필요하면 현재
+로드된 workflow skill의 파일 경로를 기준으로 `references/<file>`을 읽는다. 이 branch는 **감지 →
+적합성 평가 → 재구성 → 레시피 매칭 → 사전 준비물 탐색 → 컴파일 + 제시**의 여섯 단계를 수행한다.
 
-(c) **Read fallback (플랫폼 중립 경로 해석)**:
-- `${CLAUDE_PLUGIN_ROOT}`가 설정돼 있으면 `${CLAUDE_PLUGIN_ROOT}/skills/deep-goal-workflow/references/<파일>`
-- unset이면 진입 SKILL 자신의 절대 경로에서 `../deep-goal-workflow/references/<파일>` 상대 해석 또는 작업트리에서 `**/deep-goal-workflow/references/<파일>` glob 탐색
+현재 로드된 `SKILL.md`의 절대 경로에서 설치된 plugin root를 구하고 Node에 분리된 인자를 전달한다:
 
-(d) **모두 실패 시 degrade (핵심 보증)**: 진입 SKILL은 self-contained이므로 references 없이도 평가·4요소 컴파일·플랫폼 분기 등 **코어 기능이 동작**한다. references는 레시피/상세 정보에만 필요하므로, fallback이 전부 실패해도 cross-platform 코어 약속은 깨지지 않는다.
+`node "<absolute-plugin-root>/scripts/deep-goal-runtime.js" scout --cwd "<absolute-project-root>"`
+
+`scout.git.baselineHead`는 현재 요청의 working memory에만 유지한다. 값이 non-null이면 변경 없이 다음
+호출의 별도 인자로 forward한다:
+
+`node "<absolute-plugin-root>/scripts/deep-goal-runtime.js" evaluate-proof --cwd "<absolute-project-root>" --text "<proof-text>" --baseline "<scout.git.baselineHead>"`
+
+값이 null이면 `--baseline`을 생략하고 proof를 unconfirmed로 유지한다. plugin-root current working
+directory나 Git Bash에 의존하지 않는다. reference나 runtime을 읽을 수 없는 degraded mode는
+fail-closed로 동작하여 **미검증(unverified)** 으로 표시하고 ready-to-run으로 단정하지 않는다.
+<!-- deep-goal:claude:end -->
+
+<!-- deep-goal:codex:start -->
+### Codex reference 경로
+
+현재 로드된 workflow skill의 파일 경로에서 `references/<file>`을 이 파일 기준 상대 경로로 읽는다.
+이 branch는 **감지 → 적합성 평가 → 재구성 → 레시피 매칭 → 사전 준비물 탐색 → 컴파일 + 제시**의
+여섯 단계를 수행한다.
+
+현재 로드된 `SKILL.md`의 절대 경로에서 설치된 plugin root를 구하고 Node에 분리된 인자를 전달한다:
+
+`node "<absolute-plugin-root>/scripts/deep-goal-runtime.js" scout --cwd "<absolute-project-root>"`
+
+`scout.git.baselineHead`는 현재 요청의 working memory에만 유지한다. 값이 non-null이면 변경 없이 다음
+호출의 별도 인자로 forward한다:
+
+`node "<absolute-plugin-root>/scripts/deep-goal-runtime.js" evaluate-proof --cwd "<absolute-project-root>" --text "<proof-text>" --baseline "<scout.git.baselineHead>"`
+
+값이 null이면 `--baseline`을 생략하고 proof를 unconfirmed로 유지한다. plugin-root current working
+directory나 Git Bash에 의존하지 않는다. reference나 runtime을 읽을 수 없는 degraded mode는
+fail-closed로 동작하여 **미검증(unverified)** 으로 표시하고 ready-to-run으로 단정하지 않는다.
+<!-- deep-goal:codex:end -->
 
 ---
 
