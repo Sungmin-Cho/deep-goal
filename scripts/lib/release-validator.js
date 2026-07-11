@@ -296,10 +296,10 @@ export function validateRepository({ root = process.cwd() } = {}) {
     'skill runtime: fail-closed degraded mode',
   );
 
-  check(/^---\n[\s\S]*?^name: deep-goal$/m.test(entry), 'entry skill frontmatter name');
+  check(/^---\r?\n[\s\S]*?^name: deep-goal\r?$/m.test(entry), 'entry skill frontmatter name');
   check(/^user-invocable: true$/m.test(entry), 'entry skill frontmatter user-invocable');
   check(/^description:/m.test(entry), 'entry skill frontmatter description');
-  check(/^---\n[\s\S]*?^name: deep-goal-workflow$/m.test(workflow), 'workflow skill frontmatter name');
+  check(/^---\r?\n[\s\S]*?^name: deep-goal-workflow\r?$/m.test(workflow), 'workflow skill frontmatter name');
   check(/^user-invocable: false$/m.test(workflow), 'workflow skill frontmatter user-invocable');
 
   check(/종료[\s]?(상태|조건)/.test(entry), 'entry self-containment: end state');

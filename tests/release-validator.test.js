@@ -18,6 +18,18 @@ import { validateRepository } from '../scripts/lib/release-validator.js';
 
 const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const EXCLUDED_FIXTURE_ROOTS = new Set(['.git', 'node_modules', '.deep-review', 'docs']);
+const CRLF_SKILLS = [
+  {
+    path: 'skills/deep-goal/SKILL.md',
+    name: 'deep-goal',
+    label: 'entry skill frontmatter name',
+  },
+  {
+    path: 'skills/deep-goal-workflow/SKILL.md',
+    name: 'deep-goal-workflow',
+    label: 'workflow skill frontmatter name',
+  },
+];
 
 function fixtureCopy(t) {
   const root = mkdtempSync(join(tmpdir(), 'deep goal release fixture '));
@@ -37,6 +49,14 @@ function editJson(root, relativePath, edit) {
   const value = JSON.parse(readFileSync(file, 'utf8'));
   edit(value);
   writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function convertSkillFrontmatterToCrlf(root) {
+  for (const skill of CRLF_SKILLS) {
+    const file = join(root, skill.path);
+    const source = readFileSync(file, 'utf8');
+    writeFileSync(file, source.replace(/\r?\n/g, '\r\n'));
+  }
 }
 
 function runtimeSources(root) {
@@ -60,6 +80,40 @@ test('release validator accepts a clean repository fixture', (t) => {
   assert.equal(result.passed, true, result.failures.join('\n'));
   assert.deepEqual(result.failures, []);
   assert.ok(result.checks.length > 0);
+});
+
+test('release validator preserves exact skill names with CRLF frontmatter', (t) => {
+  const validRoot = fixtureCopy(t);
+  convertSkillFrontmatterToCrlf(validRoot);
+
+  const validResult = validateRepository({ root: validRoot });
+  assert.equal(validResult.passed, true, validResult.failures.join('\n'));
+  for (const skill of CRLF_SKILLS) {
+    assert.ok(validResult.checks.includes(skill.label));
+  }
+
+  for (const changedSkill of CRLF_SKILLS) {
+    const invalidRoot = fixtureCopy(t);
+    convertSkillFrontmatterToCrlf(invalidRoot);
+    const file = join(invalidRoot, changedSkill.path);
+    const source = readFileSync(file, 'utf8');
+    writeFileSync(
+      file,
+      source.replace(
+        `name: ${changedSkill.name}\r\n`,
+        `name: ${changedSkill.name}-wrong\r\n`,
+      ),
+    );
+
+    const invalidResult = validateRepository({ root: invalidRoot });
+    assert.ok(
+      invalidResult.failures.includes(changedSkill.label),
+      invalidResult.failures.join('\n'),
+    );
+    for (const unchangedSkill of CRLF_SKILLS.filter((skill) => skill !== changedSkill)) {
+      assert.ok(invalidResult.checks.includes(unchangedSkill.label));
+    }
+  }
 });
 
 const mutations = [
