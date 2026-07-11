@@ -12,15 +12,67 @@ user-invocable: true
 
 ## Invocation
 
-진입 경로를 맥락별로 명확히 구분한다:
+진입 경로를 호스트별로 명확히 구분한다:
+
+| Host entry | Invocation |
+|---|---|
+| Claude Code user | `/deep-goal <request>` |
+| Codex user | `$deep-goal:deep-goal <request>` |
+| Claude Code programmatic dispatch | `Skill({ skill: "deep-goal:deep-goal", args })` |
+
+프로그래밍 dispatch는 Claude Code용이며 Codex 사용자 진입이 아니다.
+
+<!-- deep-goal:claude:start -->
+### Claude Code 경로
 
 | 맥락 | 진입 방법 |
 |---|---|
-| **Claude Code 사용자** | `/deep-goal <요청>` (슬래시 커맨드) |
-| **Codex 사용자** | `$deep-goal:deep-goal <요청>` (`.codex-plugin` defaultPrompt와 일치하는 정식 진입) |
-| **SDK / 프로그래밍 invoke (Claude·Codex 공통, 사용자 진입 아님)** | `Skill({ skill: "deep-goal:deep-goal", args })` |
+| **Claude Code 사용자** | `/deep-goal <요청>` |
 
-`Skill({...})`은 에이전트/SDK 호출용이며 **Codex 사용자 진입으로 표기하지 않는다**. Codex 사용자의 정식 진입은 `$deep-goal:deep-goal`이다.
+이 entry가 먼저 로드된 상태에서 description routing이 sibling workflow를 아직 로드하지 않았다면
+`Skill({ skill: "deep-goal:deep-goal-workflow" })`로 sibling workflow를 로드한다. 이후 **감지 → 적합성 평가 →
+재구성 → 레시피 매칭 → 사전 준비물 탐색 → 컴파일 + 제시**의 여섯 단계를 순서대로 수행한다.
+
+현재 로드된 `SKILL.md`의 절대 경로에서 설치된 plugin root를 구하고, 다음처럼 Node에 각 인자를
+분리해 전달한다:
+
+`node "<absolute-plugin-root>/scripts/deep-goal-runtime.js" scout --cwd "<absolute-project-root>"`
+
+`scout.git.baselineHead`는 현재 요청의 working memory에만 유지한다. 값이 non-null이면 그대로 다음
+별도 인자로 전달한다:
+
+`node "<absolute-plugin-root>/scripts/deep-goal-runtime.js" evaluate-proof --cwd "<absolute-project-root>" --text "<proof-text>" --baseline "<scout.git.baselineHead>"`
+
+값이 null이면 `--baseline`을 생략하고 proof를 unconfirmed로 유지한다. plugin-root current working
+directory나 Git Bash에 의존하지 않는다. runtime 또는 file tool을 사용할 수 없는 degraded mode는
+fail-closed로 동작하며 결과를 **미검증(unverified)** 으로 표시하고 ready-to-run으로 단정하지 않는다.
+<!-- deep-goal:claude:end -->
+
+<!-- deep-goal:codex:start -->
+### Codex 경로
+
+| 맥락 | 진입 방법 |
+|---|---|
+| **Codex 사용자** | `$deep-goal:deep-goal <요청>` |
+
+현재 로드된 entry skill의 파일 경로에서 `../deep-goal-workflow/SKILL.md`를 읽고, 그 파일을 기준으로
+`references/` children을 해석한다. 이후 **감지 → 적합성 평가 → 재구성 → 레시피 매칭 → 사전 준비물
+탐색 → 컴파일 + 제시**의 여섯 단계를 순서대로 수행한다.
+
+현재 로드된 `SKILL.md`의 절대 경로에서 설치된 plugin root를 구하고, 다음처럼 Node에 각 인자를
+분리해 전달한다:
+
+`node "<absolute-plugin-root>/scripts/deep-goal-runtime.js" scout --cwd "<absolute-project-root>"`
+
+`scout.git.baselineHead`는 현재 요청의 working memory에만 유지한다. 값이 non-null이면 그대로 다음
+별도 인자로 전달한다:
+
+`node "<absolute-plugin-root>/scripts/deep-goal-runtime.js" evaluate-proof --cwd "<absolute-project-root>" --text "<proof-text>" --baseline "<scout.git.baselineHead>"`
+
+값이 null이면 `--baseline`을 생략하고 proof를 unconfirmed로 유지한다. plugin-root current working
+directory나 Git Bash에 의존하지 않는다. runtime 또는 file tool을 사용할 수 없는 degraded mode는
+fail-closed로 동작하며 결과를 **미검증(unverified)** 으로 표시하고 ready-to-run으로 단정하지 않는다.
+<!-- deep-goal:codex:end -->
 
 무인수 호출 시 대화 진입: "무엇을 끝까지 진행하고 싶나요?" (→ [6단계 절차 요약](#6단계-절차-요약) 실행)
 
@@ -28,13 +80,13 @@ user-invocable: true
 
 ## Prerequisites
 
-이 스킬은 `deep-goal-workflow` 스킬과 함께 동작한다 (Claude Code가 description 매칭으로 자동 로드).
-
-**Codex / Copilot / Gemini fallback**: sibling 자동 로드가 약한 런타임에서는 `Skill({ skill: "deep-goal:deep-goal-workflow" })`로 명시 로드하거나, `${CLAUDE_PLUGIN_ROOT}/skills/deep-goal-workflow/references/<파일>` 경로로 Read한다.
+이 스킬은 sibling `deep-goal-workflow` 스킬과 함께 동작한다. entry만 workflow를 로드하며, 이미
+로드된 workflow가 자기 자신을 다시 로드하지 않는다. 호스트별 로드 규칙은 위 paired section이
+정본이다.
 
 **Cross-platform self-containment**: 타 플랫폼에서 `deep-goal-workflow` 자동 로드가 약해도 동작하도록, 아래 핵심 규칙을 **의도적으로 인라인 보존**한다. 이는 `deep-goal-workflow`와의 의도적 duplication이며, 변경 시 양쪽을 동기화해야 한다.
 
-<!-- SYNC: mirrors deep-goal-workflow + references/condition-compiler.md(render decision·self-report caveat)·platform-matrix.md·fitness-rubric.md(부재 또는 부실) — 변경 시 동기화 -->
+<!-- SYNC: mirrors deep-goal-workflow + ../deep-goal-workflow/references/condition-compiler.md(render decision·self-report caveat) + ../deep-goal-workflow/references/platform-matrix.md + ../deep-goal-workflow/references/fitness-rubric.md(부재 또는 부실) — 변경 시 동기화 -->
 
 ---
 
@@ -56,7 +108,7 @@ deep-goal의 역할은 완성된 `/goal` 조건을 제시하는 데서 끝나고
 | 🔧 **재구성** | 종료조건 모호 / 범위 과대 / 증명 방법 부재 또는 부실(주관·비실행·미확인) | 측정 가능화·분해·커맨드 식별 제안 |
 | ⛔ **반려** | 검증 불가 주관 목표 / 단발성 / 무관한 잡다 목록 | 이유 + 대안(`/loop`·일반 작업) 제시 |
 
-상세 기준은 `references/fitness-rubric.md` 참조.
+상세 기준은 `../deep-goal-workflow/references/fitness-rubric.md` 참조.
 
 ---
 
@@ -83,7 +135,7 @@ Claude의 `/goal` 평가자(Haiku 모델)는 **도구를 호출하지 않으며*
 
 **신뢰 한계(정직 caveat)**: 이 표면화 출력은 평가자가 독립 검증하지 않는 self-report다. 고위험 goal은 검증가능 anchor(commit SHA·CI URL·deep-work `session-receipt.json`)를 우선한다.
 
-**증명 방법 verifiability**: prep-scout가 confirmed한 커맨드/객관 아티팩트만 ready-to-run으로 제시하고, unconfirmed(추정)·주관 placeholder는 "⚠️ 미검증" 표시 + 재구성 유도(references/condition-compiler.md render decision과 동기).
+**증명 방법 verifiability**: prep-scout가 confirmed한 커맨드/객관 아티팩트만 ready-to-run으로 제시하고, unconfirmed(추정)·주관 placeholder는 "⚠️ 미검증" 표시 + 재구성 유도(`../deep-goal-workflow/references/condition-compiler.md` render decision과 동기).
 
 ---
 
@@ -96,7 +148,7 @@ Claude의 `/goal` 평가자(Haiku 모델)는 **도구를 호출하지 않으며*
 
 **PLAN.md 분리 임계치**: 조건이 ~2,800자 초과 예상 또는 순차 게이트 3개 이상이면 시퀀스를 PLAN.md로 분리하고 조건을 압축한다.
 
-상세 분기표는 `references/platform-matrix.md` 참조.
+상세 분기표는 `../deep-goal-workflow/references/platform-matrix.md` 참조.
 
 ---
 

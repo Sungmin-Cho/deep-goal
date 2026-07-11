@@ -4,6 +4,14 @@ deep-goal의 6단계(컴파일 + 제시)에서 플랫폼별 조건 문구를 결
 
 ---
 
+## Shared runtime invariant
+
+Host presentation differs, but both hosts use the same shared Node `scout` and `evaluate-proof` semantics.
+각 host는 현재 로드된 `SKILL.md`의 절대 경로에서 plugin root를 구하고, absolute project root와 proof
+text를 별도 argv로 전달한다. `scout.git.baselineHead`는 current request memory에만 보관해 non-null일
+때 `evaluate-proof --baseline`으로 그대로 전달한다. null/missing/non-Git baseline은 fail-closed
+`미검증(unverified)` 상태이며 ready-to-run으로 단정하지 않는다.
+
 ## 플랫폼 비교 표
 
 | 항목 | Claude Code `/goal` | Codex `/goal` |

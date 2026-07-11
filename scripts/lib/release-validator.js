@@ -101,6 +101,42 @@ function sectionAfterHeading(text, heading) {
   return boundary === -1 ? remainder : remainder.slice(0, boundary + 1);
 }
 
+function countOccurrences(text, token) {
+  return text.split(token).length - 1;
+}
+
+function markedHostSection(text, host) {
+  const start = `<!-- deep-goal:${host}:start -->`;
+  const end = `<!-- deep-goal:${host}:end -->`;
+  if (countOccurrences(text, start) !== 1 || countOccurrences(text, end) !== 1) {
+    return null;
+  }
+  const startIndex = text.indexOf(start) + start.length;
+  const endIndex = text.indexOf(end, startIndex);
+  return endIndex > startIndex ? text.slice(startIndex, endIndex) : null;
+}
+
+function hasPortableRuntimeCommands(text, commands) {
+  return commands.every((command) => text.includes(
+    `node "<absolute-plugin-root>/scripts/deep-goal-runtime.js" ${command} `
+      + '--cwd "<absolute-project-root>"',
+  ));
+}
+
+function hasBaselineForwarding(text) {
+  return text.includes('--baseline "<scout.git.baselineHead>"');
+}
+
+function hasSixStages(text) {
+  return ['감지', '적합성', '재구성', '레시피', '사전 준비물', '컴파일']
+    .every((stage) => text.includes(stage));
+}
+
+function codexSectionIsPortable(text) {
+  return !/(?:Skill\(|CLAUDE_PLUGIN_ROOT)/.test(text)
+    && !/(?:^|\n)\s*`?(?:bash|sh)\b|```(?:bash|sh)\b/.test(text);
+}
+
 export function validateRepository({ root = process.cwd() } = {}) {
   const repositoryRoot = resolve(root);
   const checks = [];
@@ -148,6 +184,117 @@ export function validateRepository({ root = process.cwd() } = {}) {
   const prepScout = readText(file('skills/deep-goal-workflow/references/prep-scout.md')) ?? '';
   const recipesIndex = readText(file('skills/deep-goal-workflow/references/recipes/README.md')) ?? '';
   const robustRecipe = readText(file('skills/deep-goal-workflow/references/recipes/robust-implementation.md')) ?? '';
+
+  const entryClaude = markedHostSection(entry, 'claude');
+  const entryCodex = markedHostSection(entry, 'codex');
+  const workflowClaude = markedHostSection(workflow, 'claude');
+  const workflowCodex = markedHostSection(workflow, 'codex');
+  const runtimeDocuments = [entry, workflow, prepScout, compiler, platformMatrix];
+
+  check(entryClaude !== null && entryCodex !== null, 'skill runtime: entry host markers');
+  check(
+    workflowClaude !== null && workflowCodex !== null,
+    'skill runtime: workflow host markers',
+  );
+  check(
+    entryClaude !== null
+      && entryCodex !== null
+      && hasPortableRuntimeCommands(entryClaude, ['scout', 'evaluate-proof'])
+      && hasPortableRuntimeCommands(entryCodex, ['scout', 'evaluate-proof']),
+    'skill runtime: entry absolute Node route',
+  );
+  check(
+    workflowClaude !== null
+      && workflowCodex !== null
+      && hasPortableRuntimeCommands(workflowClaude, ['scout', 'evaluate-proof'])
+      && hasPortableRuntimeCommands(workflowCodex, ['scout', 'evaluate-proof']),
+    'skill runtime: workflow absolute Node route',
+  );
+  check(
+    hasPortableRuntimeCommands(prepScout, ['scout']),
+    'skill runtime: prep-scout absolute Node route',
+  );
+  check(
+    hasPortableRuntimeCommands(compiler, ['evaluate-proof']),
+    'skill runtime: compiler absolute Node route',
+  );
+  check(
+    entryClaude !== null
+      && entryCodex !== null
+      && hasBaselineForwarding(entryClaude)
+      && hasBaselineForwarding(entryCodex),
+    'skill runtime: entry baseline forwarding',
+  );
+  check(
+    workflowClaude !== null
+      && workflowCodex !== null
+      && hasBaselineForwarding(workflowClaude)
+      && hasBaselineForwarding(workflowCodex),
+    'skill runtime: workflow baseline forwarding',
+  );
+  check(hasBaselineForwarding(prepScout), 'skill runtime: prep-scout baseline forwarding');
+  check(hasBaselineForwarding(compiler), 'skill runtime: compiler baseline forwarding');
+  check(
+    entryClaude !== null
+      && entryClaude.includes('Skill({ skill: "deep-goal:deep-goal-workflow" })'),
+    'host dispatch: entry Claude workflow load',
+  );
+  check(
+    entryCodex !== null && entryCodex.includes('../deep-goal-workflow/SKILL.md'),
+    'host dispatch: entry Codex workflow read',
+  );
+  check(
+    workflowClaude !== null
+      && !workflowClaude.includes('Skill({ skill: "deep-goal:deep-goal-workflow"'),
+    'host dispatch: workflow no Claude self-load',
+  );
+  check(
+    workflowCodex !== null && !workflowCodex.includes('../deep-goal-workflow/SKILL.md'),
+    'host dispatch: workflow no Codex self-read',
+  );
+  check(
+    entryCodex !== null && codexSectionIsPortable(entryCodex),
+    'host dispatch: entry Codex portable',
+  );
+  check(
+    workflowCodex !== null && codexSectionIsPortable(workflowCodex),
+    'host dispatch: workflow Codex portable',
+  );
+  check(
+    entryClaude !== null
+      && entryCodex !== null
+      && hasSixStages(entryClaude)
+      && hasSixStages(entryCodex),
+    'skill runtime: entry six stages per host',
+  );
+  check(
+    workflowClaude !== null
+      && workflowCodex !== null
+      && hasSixStages(workflowClaude)
+      && hasSixStages(workflowCodex),
+    'skill runtime: workflow six stages per host',
+  );
+  check(
+    runtimeDocuments.every((document) => !/```(?:bash|sh)\b/.test(document)),
+    'documentation: no bash or sh fences',
+  );
+  check(
+    runtimeDocuments.every(
+      (document) => !/deep-goal:(?:probe|render-decision):(start|end)/.test(document),
+    ),
+    'documentation: no shell mirror markers',
+  );
+  check(
+    runtimeDocuments.every((document) => !/scripts\/[^\s`"']+\.sh\b/.test(document)),
+    'documentation: no deleted shell routes',
+  );
+  check(
+    [entryClaude, entryCodex, workflowClaude, workflowCodex, prepScout, compiler]
+      .every((document) => document !== null
+        && /fail-closed/i.test(document)
+        && /(?:unverified|미검증)/i.test(document)),
+    'skill runtime: fail-closed degraded mode',
+  );
 
   check(/^---\n[\s\S]*?^name: deep-goal$/m.test(entry), 'entry skill frontmatter name');
   check(/^user-invocable: true$/m.test(entry), 'entry skill frontmatter user-invocable');
@@ -202,9 +349,8 @@ export function validateRepository({ root = process.cwd() } = {}) {
   check(/(stale|이전 세션)/.test(robustRecipe), 'robust recipe stale receipt rejection');
   check(/session-receipt\.json/.test(sectionAfterHeading(robustRecipe, '### Codex')),
     'robust recipe Codex receipt anchor');
-  check(/deep-goal:probe:start/.test(prepScout), 'prep-scout probe mirror present');
   check(/(confirmed|unconfirmed)/.test(prepScout), 'prep-scout proof-status labels');
-  check(/classify_proof_line/.test(compiler), 'compiler proof classifier');
+  check(/evaluate-proof/.test(compiler), 'compiler Node proof evaluator');
   check(/subjective-placeholder/.test(compiler), 'compiler subjective proof class');
   check(/unconfirmed-artifact/.test(compiler), 'compiler unconfirmed artifact class');
 

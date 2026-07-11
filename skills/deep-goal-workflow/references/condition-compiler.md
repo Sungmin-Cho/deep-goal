@@ -1,198 +1,108 @@
 # condition-compiler — 조건 컴파일 규칙
 
-deep-goal의 6단계(컴파일 + 제시)에서 사용한다. 4요소와 평가자 표면화 규칙을 적용해 플랫폼 맞춤 `/goal` 조건을 생성한다.
-
-<!-- 수치 출처 단서(W4): 4,000자 한도와 `or stop after N turns` 상한은 Claude Code `/goal` 공식 문서 기준(v2.1.139+)이다. 버전에 따라 변동 가능하므로, 조건이 한도에 근접하면 "이 수치는 현재 버전 기준"이라는 단서를 컴파일 출력에 포함할 것. -->
+deep-goal의 6단계(컴파일 + 제시)에서 사용한다. Claude Code와 Codex 모두 같은 Node proof evaluator를
+사용하고, 결과의 presentation만 플랫폼에 맞게 바꾼다.
 
 ---
 
 ## 공통 4요소
 
-모든 플랫폼에서 컴파일된 조건은 다음 4요소를 포함해야 한다:
+| # | 요소 | 설명 |
+|---|---|---|
+| 1 | **측정 가능한 종료상태** | 무엇이 달성되면 완료인가 |
+| 2 | **증명 방법** | 종료상태를 어떤 커맨드나 artifact로 확인하는가 |
+| 3 | **불변 제약** | 진행 중 바뀌면 안 되는 계약 |
+| 4 | **상한** | 구체적인 turn/time 한도 |
 
-| # | 요소 | 설명 | 예시 |
-|---|---|---|---|
-| 1 | **측정 가능한 종료상태** | 무엇이 달성되면 완료인가 — 테스트 결과, 빌드 exit code, 파일 개수, 빈 큐 등 | "모든 TypeScript 에러 0 (`tsc --noEmit` 성공)" |
-| 2 | **증명 방법** | 종료상태를 어떻게 확인하는가 — 커맨드 또는 아티팩트 | "`npm test` 전체 통과" / "PLAN.md 최종 체크포인트 완료" |
-| 3 | **불변 제약** | goal 진행 중 바뀌면 안 되는 것 | "기존 public API 시그니처 유지" / "main 브랜치에 직접 push 금지" |
-| 4 | **상한** | 턴 또는 시간 한도 — `or stop after N turns` | "or stop after 30 turns" |
+## 평가자 표면화 규칙
 
----
+Claude `/goal` 평가자는 도구를 호출하지 않고 대화에 표면화된 출력만 판정한다. 따라서 모든 Claude
+조건에는 "각 단계/게이트 결과를 대화에 명시 보고하라"는 지침을 넣는다. 이 출력은 평가자가
+**독립 검증**하지 않는 self-report이므로, 고위험 proof는 commit SHA, CI URL, deep-work
+`session-receipt.json` 같은 외부 확인 anchor에 고정한다.
 
-## 평가자 표면화 규칙 (핵심 — 필수 삽입)
-
-Claude의 `/goal` 평가자(Haiku 모델)는 **도구를 호출하지 않으며**, Claude가 대화에 **이미 표면화한 출력**만으로 종료 조건 충족 여부를 yes/no로 판정한다.
-
-**따라서 모든 컴파일된 조건에는 다음 지침이 반드시 포함되어야 한다:**
-
-> "각 단계/게이트 결과를 대화에 명시 보고하라."
-
-이 지침이 없으면 Claude가 내부적으로 검증을 완료해도 평가자가 종료를 판정하지 못한다. deep-goal이 책임지는 비자명한 컴파일 규칙이다.
-
-> **신뢰 한계(정직 caveat)**: 이 표면화 출력은 평가자가 **독립 검증하지 않는** self-report다 — 실행 모델이 커맨드를 돌리지 않고 "통과"를 출력해도 평가자는 수용할 수 있다. 고위험 goal의 증명 방법은 순수 대화 paste보다 검증가능 anchor(commit SHA·CI run URL·deep-work `session-receipt.json`)를 우선한다.
-
-**표면화 지침 문구 예시:**
-- "각 단계 결과(phase 전환·승인 게이트·review verdict·테스트 출력)를 대화에 명시적으로 보고할 것."
-- "각 게이트 통과 결과를 대화에 보고한 뒤에만 다음 단계로 진행한다."
-- "완료 시 `tsc --noEmit` 출력을 대화에 그대로 붙여 보고할 것."
-
----
+Codex는 자체 판정하지만 같은 4요소와 proof class를 사용하고 단계별 checkpoint를 남긴다.
 
 ## 4,000자 한도와 PLAN.md 분리
 
-Claude `/goal` 조건에는 **4,000자 한도**가 있다(현재 버전 기준 — 버전 변동 가능).
+Claude 조건은 현재 버전 기준 **4,000자** 한도다. 약 2,800자를 넘거나 순차 gate가 3개 이상이면
+시퀀스를 `PLAN.md`로 분리한다. Claude에는 `or stop after <구체 숫자> turns`, Codex에는 checkpoint와
+필요한 `pause`/`resume` 지침을 제시한다.
 
-### 분리 임계치 (I5 구체화)
+## Portable evaluate-proof contract
 
-컴파일된 조건이 다음 중 하나에 해당하면 시퀀스를 `PLAN.md`로 분리한다:
+현재 로드된 `SKILL.md`의 절대 경로에서 설치된 plugin root를 구한다. prep-scout가 current request
+working memory에 보관한 baseline과 proof text를 shell string이 아닌 분리된 argv로 전달한다:
 
-- **(a) ~2,800자(4,000자의 70%) 초과 예상**: 조건 문구가 이 임계치를 넘을 것으로 보이면 분리
-- **(b) 순차 게이트/단계 3개 이상**: 게이트가 3개 이상 있으면 PLAN.md로 시퀀스를 표현
+`node "<absolute-plugin-root>/scripts/deep-goal-runtime.js" evaluate-proof --cwd "<absolute-project-root>" --text "<proof-text>" --baseline "<scout.git.baselineHead>"`
 
-**분리 후 조건 압축 형태:**
-```
-PLAN.md 단계대로 완수. 각 게이트 통과 결과를 대화에 보고할 것.
-[종료조건: 최종 게이트 PASS AND 테스트 통과] or stop after <N> turns.
-(N을 구체 숫자로 치환 — 예: 40)
-(이 수치는 현재 버전 기준)
-```
+`scout.git.baselineHead`가 null 또는 missing이거나 project가 non-Git이면 `--baseline`을 생략한다.
+그 경우 commit/file freshness는 unconfirmed로 유지한다. plugin-root current working directory나 Git
+Bash에 의존하지 않는다.
 
-한도에 근접한 경우 컴파일 출력 마지막에 다음 단서를 추가한다:
-> "※ 4,000자 한도는 Claude Code 현재 버전 기준이며 업데이트 시 변동될 수 있습니다."
+성공 시 stdout은 JSON object 한 개와 마지막 newline만 포함한다:
 
----
-
-## 컴파일 예시
-
-### 단발 goal 예시 (Claude)
-
-```
-이 저장소의 모든 TypeScript 컴파일 에러를 수정한다.
-종료조건: `tsc --noEmit`가 에러 0으로 종료.
-불변 제약: 기존 public 함수 시그니처 변경 금지, 테스트 파일 삭제 금지.
-완료 시 `tsc --noEmit` 출력을 대화에 그대로 붙여 보고할 것.
-or stop after 25 turns.
+```json
+{
+  "proofClass": "confirmed-command | objective-artifact | unconfirmed-command | unconfirmed-artifact | subjective-placeholder",
+  "rendered": "<safe rendered proof line>"
+}
 ```
 
-### 레시피 기반 조건 예시 (Claude, robust-implementation)
+exit 2는 argument contract 오류, exit 1은 cwd/permission 등 operational 오류다. parse 실패, non-zero
+exit, unknown `proofClass`는 fail-closed로 처리해 **미검증(unverified)** 으로 표시하고 ready-to-run으로
+단정하지 않는다.
 
-```
-deep-work 세션으로 <기능>을 Research→Plan→Implement→Test 순으로 진행한다.
-deep-work의 Plan 승인과 각 phase Exit Gate에서는 사용자에게 승인을 요청하고, 승인이 대화에 보고된 뒤에만 다음 단계로 진행한다(승인 전 자율 진행 금지 — 이 게이트는 종료조건의 일부다).
-Implement 완료 직후 deep-review-loop(--max=3)를 돌려 verdict가 APPROVE가 될 때까지 대응한다.
-종료조건: 모든 phase 완료 AND 모든 승인 게이트(Plan 승인·Exit Gate) 통과가 보고됨 AND 최종 deep-review-loop APPROVE AND 테스트 전체 통과.
-각 단계 결과(phase 전환·승인 게이트·review verdict·테스트 출력)를 대화에 명시적으로 보고할 것.
-or stop after 40 turns.
-```
+## Five-class decision table
 
----
-
-## 증명 방법 verifiability 검사 (classify → render — 필수)
-
-증명 방법은 **먼저 `classify_proof_line`으로 분류**(텍스트+probe+git/파일 실측에서만 클래스 파생)한
-뒤 그 출력만 `render_proof_line`에 전달한다(정본은 `scripts/lib/proof-gate.sh`, 아래는 sync-검사되는 미러). 5-클래스:
-
-| 클래스 | 판정 근거(classify) | 렌더링(render) |
+| class | 판정 근거 | presentation |
 |---|---|---|
-| `confirmed-command` | 실행형 커맨드 shape **AND** probe=confirmed **AND 감지 커맨드와 일치**(R2 Fix 4 — 임의 커맨드 ready 금지) | 그대로 (ready-to-run) |
-| `objective-artifact` | **BASELINE_HEAD..HEAD 구간의 commit SHA**(strict 후손 AND 현재 HEAD 도달 — plan-R4 Fix 9b + R2 Fix 5) 또는 **선언 digest가 실제 계산과 일치하고 baseline 후손 커밋에서 Add/Modify 된 파일**(plan-R4 Fix 9 + R1 Fix 1 freshness) | 그대로 (ready-to-run) |
-| `unconfirmed-command` | 실행형 커맨드 shape **AND** (probe≠confirmed **또는 감지 커맨드 불일치** — `npm publish`·`make deploy` 등) | ⚠️ 미검증 + 실행 전 존재 확인 |
-| `unconfirmed-artifact` | **일반 URL** · **bare 선재 파일** · **digest 불일치 파일** · **선재/미추적 파일+해시**(baseline 후손 아님 — R1 Fix 1) · **baseline 자신/조상/HEAD 미도달 side-branch/무관 브랜치 SHA**(plan-R4 Fix 9 + R2 Fix 5 — 실측 없이 ready 금지) | ⚠️ 미검증 + 신선도/현재-작업 바인딩 확인 |
-| `subjective-placeholder` | "수동 확인"·"완료되면" 등 실행 불가 산문, 또는 미분류(안전 수렴) | **절대 ready-to-run 금지** + 재구성 유도 |
+| `confirmed-command` | scout가 실제 manifest에서 확인한 command와 proof text가 일치 | ready-to-run |
+| `objective-artifact` (commit) | commit이 baseline의 strict descendant이고 현재 `HEAD`까지 도달 | ready-to-run |
+| `objective-artifact` (file) | declared digest equals the committed `HEAD` blob, path Added/Modified in `baseline..HEAD`, and no post-commit dirty mutation | ready-to-run |
+| `unconfirmed-command` | command shape지만 scout가 확인하지 못했거나 detected command와 불일치 | `⚠️ 미검증` + 실행 전 존재 확인 |
+| `unconfirmed-artifact` | URL, bare/stale file, digest mismatch, baseline 자신/조상/side branch, null/missing/non-Git baseline | `⚠️ 미검증` + freshness 확인 |
+| `subjective-placeholder` | 수동 확인, 완료되면, 적절히 같은 실행 불가 산문 | `⚠️ 미검증(주관)` + 재구성 |
 
-```bash
-# <!-- deep-goal:render-decision:start -->
-# _sha256: 파일 → 소문자 hex digest(계산 불가 시 빈 출력). 크로스플랫폼(shasum/sha256sum).
-_sha256() {
-  if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" 2>/dev/null | awk '{print $1}'
-  elif command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" 2>/dev/null | awk '{print $1}'; fi
-}
-# _norm_run: "npm test" 를 "npm run test" 로 정규화(그 외 그대로) — confirmed-command 일치 비교용(R2 Fix 4).
-_norm_run() { case "$1" in "npm test") printf 'npm run test' ;; *) printf '%s' "$1" ;; esac; }
-# classify_proof_line: 증명 방법 텍스트 + probe 클래스 → 렌더 클래스(결정론, 클래스 주입 불가).
-#   $1=proof-method 텍스트, $2=probe 클래스(confirmed|unconfirmed|""), $3=BASELINE_HEAD(goal 시작 커밋;
-#   비면 현재 HEAD), $4=감지 커맨드(detect_proof_command 의 커맨드 필드; confirmed-command 결합용 R2 Fix 4).
-#   objective SHA 는 baseline 의 strict 후손만 인정(plan-R4 Fix 9b).
-classify_proof_line() {
-  local text="$1" probe="${2:-}" base="${3:-}" det="${4:-}" tok decl want got full bfull
-  # (1) 주관 placeholder(실행 불가 산문) 최우선 — confirmed/objective 경로로 새지 못하게
-  case "$text" in
-    *수동*|*확인한다*|*구현\ 완료*|*완료되면*|*적절히*|*알아서*|*대충*)
-      printf 'subjective-placeholder\n'; return 0 ;;
-  esac
-  tok="${text%% *}"
-  # (2a) commit SHA — baseline..HEAD 구간만 objective(plan-R4 Fix 9b + R2 Fix 5: 현재-task 연결 증명).
-  if printf '%s' "$tok" | grep -qE '^[0-9a-f]{7,40}$' && git rev-parse --verify -q "${tok}^{commit}" >/dev/null 2>&1; then
-    [ -z "$base" ] && base="$(git rev-parse HEAD 2>/dev/null)"
-    full="$(git rev-parse --verify -q "${tok}^{commit}" 2>/dev/null)"
-    bfull="$(git rev-parse --verify -q "${base}^{commit}" 2>/dev/null)"
-    # baseline 의 strict 후손(현재-task) AND 현재 HEAD 도달 가능(옆 브랜치 배제, R2 Fix 5) = baseline..HEAD.
-    if [ -n "$bfull" ] && [ "$full" != "$bfull" ] \
-       && git merge-base --is-ancestor "$bfull" "$full" 2>/dev/null \
-       && git merge-base --is-ancestor "$full" HEAD 2>/dev/null; then
-      printf 'objective-artifact\n'; return 0     # baseline..HEAD = 현재 라인에 생성된 새 커밋
-    fi
-    printf 'unconfirmed-artifact\n'; return 0      # baseline 자신/조상/HEAD 미도달 side-branch/무관 → stale
-  fi
-  # (2b) 파일 + 선언 digest 실제 계산·대조(plan-R4 Fix 9a) + baseline freshness 바인딩(R1 Fix 1).
-  if [ -e "$tok" ]; then
-    decl="$(printf '%s' "$text" | grep -oE 'sha256:[0-9a-fA-F]{64}' | head -1)"
-    if [ -n "$decl" ]; then
-      want="$(printf '%s' "${decl#sha256:}" | tr 'A-F' 'a-f')"
-      got="$(_sha256 "$tok")"
-      if [ -n "$got" ] && [ "$got" = "$want" ]; then
-        # digest 일치 — stale 방지(R1 Fix 1): baseline 후손 커밋에서 Add/Modify 된 파일만 objective.
-        # 선재/미추적 파일은 현재 해시가 맞아도 현재-작업 산출물 증명이 아님(SHA baseline 가드와 대칭).
-        [ -z "$base" ] && base="$(git rev-parse HEAD 2>/dev/null)"
-        if [ -n "$base" ] && [ -n "$(git log --diff-filter=AM "$base"..HEAD -- "$tok" 2>/dev/null)" ]; then
-          printf 'objective-artifact\n'; return 0
-        fi
-        printf 'unconfirmed-artifact\n'; return 0   # 선재/미추적 파일+현재 해시만 → stale 가능
-      fi
-      printf 'unconfirmed-artifact\n'; return 0    # digest 불일치/계산 불가
-    fi
-    printf 'unconfirmed-artifact\n'; return 0       # bare 선재 파일(해시 없음) → 검증 필요
-  fi
-  # (3) 일반 URL — 컴파일 시점 검증 불가 → unconfirmed-artifact
-  case "$text" in
-    http://*|https://*) printf 'unconfirmed-artifact\n'; return 0 ;;
-  esac
-  # (4) 실행형 커맨드 shape → probe 확인 + 감지 커맨드 일치 여부로 분기(R2 Fix 4)
-  case "$text" in
-    npm\ *|npx\ *|yarn\ *|pnpm\ *|pytest*|python\ -m\ *|go\ test*|go\ build*|cargo\ *|make\ *|tsc\ *|*--noEmit*)
-      # confirmed-command 는 probe=confirmed 이고 proof 텍스트가 감지 커맨드와 일치할 때만 —
-      # 임의 커맨드-형태(npm publish·make deploy 등)는 감지 커맨드가 아니므로 unconfirmed-command.
-      if [ "$probe" = "confirmed" ] && [ -n "$det" ] && [ "$(_norm_run "$text")" = "$(_norm_run "$det")" ]; then
-        printf 'confirmed-command\n'; return 0
-      fi
-      printf 'unconfirmed-command\n'; return 0 ;;
-  esac
-  # (5) 그 외 산문 → 안전 수렴(절대 ready-to-run 아님)
-  printf 'subjective-placeholder\n'; return 0
-}
-# render_proof_line: classify 출력 클래스 → /goal 조건 라인. classify 출력만 소비.
-render_proof_line() {
-  case "$1" in
-    confirmed-command|objective-artifact)
-      printf '%s\n' "$2" ;;                                                       # ready-to-run 그대로
-    unconfirmed-command)
-      printf '⚠️ 미검증 — `%s` 가 실제 존재하는지 실행 전 확인 필요\n' "$2" ;;        # ready-to-run 단정 금지
-    unconfirmed-artifact)
-      printf '⚠️ 미검증 — %s 의 유효성·신선도(선재/baseline stale 여부)를 실행 전 확인 필요; 콘텐츠 검증 커맨드·해시 또는 baseline 이후 새 커밋으로 앵커 권장\n' "$2" ;;  # URL·선재파일·stale SHA
-    subjective-placeholder)
-      printf '⚠️ 미검증(주관) — 실행 가능한 검증 커맨드로 재구성 필요 (현재: %s)\n' "$2" ;;  # 절대 ready-to-run 아님
-    *)
-      printf '⚠️ 미검증 — 분류 불가, 실행 전 확인 필요 (%s)\n' "$2" ;;              # 안전 수렴
-  esac
-}
-# 파이프라인: render_proof_line "$(classify_proof_line "$text" "$probe" "$base" "$detected")" "$text"
-# <!-- deep-goal:render-decision:end -->
+runtime의 `classifyProofLine` Node classifier는 산문이 class를 주입하지 못하게 하고,
+위 다섯 class 외 결과를 fail-closed로 `미검증` 처리한다. `confirmed-command`와
+`objective-artifact`만 ready-to-run으로 제시할 수 있다.
+
+## Manual file-tool fallback
+
+runtime을 사용할 수 있어도 project file tool이 제한되면 사용자가 제공한 command/artifact를 그대로
+실행 가능한 사실로 간주하지 않는다. inferred command/artifact는 모두 **미검증(unverified)** 으로
+표시한다. null/missing/non-Git baseline에서 file 또는 SHA proof를 objective로 승격하지 않는다.
+
+runtime 자체를 사용할 수 없으면 proof text, scout status, baseline을 임의로 재구성하지 않는다.
+사용자에게 확인 자료를 요청하고 fail-closed placeholder를 렌더한다. ready-to-run 표시는 금지한다.
+
+## 플랫폼별 렌더링
+
+### Claude Code
+
+```text
+<측정 가능한 종료상태>를 달성한다.
+증명: <Node evaluator의 rendered 값>.
+불변 제약: <확인된 제약>.
+각 단계/게이트 결과를 대화에 명시 보고할 것.
+or stop after 30 turns.
+```
+
+### Codex
+
+```text
+[달성] <측정 가능한 종료상태>
+[변경 금지] <확인된 제약>
+[검증] <Node evaluator의 rendered 값>
+[종료] 검증 통과 시 완료하고 각 단계 checkpoint를 기록한다.
 ```
 
 ## 컴파일 절차 요약
 
-1. 4요소가 모두 채워졌는지 확인 + 증명 방법을 `classify_proof_line`으로 분류(텍스트+probe+git/파일 실측) → `render_proof_line` 렌더 — confirmed-command/objective-artifact만 ready-to-run, unconfirmed-*/placeholder는 미검증 표시(클래스는 산문이 지정하지 않는다; URL은 신선도 미검증)
-2. 평가자 표면화 지침을 조건 끝 또는 적절한 위치에 삽입
-3. 문자 수 추산 → 2,800자 초과 예상 또는 순차 게이트 3개 이상이면 PLAN.md 분리
-4. 플랫폼 분기 적용 (`references/platform-matrix.md` 참조)
-5. 복사용 코드블록으로 제시 + 활성화 안내 + (한도 근접 시) 수치 버전 단서
+1. 공통 4요소를 채운다.
+2. absolute `evaluate-proof` argv로 proof를 분류하고 JSON shape를 검증한다.
+3. `confirmed-command`/`objective-artifact`만 ready-to-run으로 유지하고 나머지는 미검증으로 렌더한다.
+4. Claude에는 evaluator 표면화 규칙, Codex에는 checkpoint 규칙을 적용한다.
+5. 2,800자 또는 gate 3개 임계치를 넘으면 `PLAN.md`로 분리한다.
+6. 근거 요약, 복사용 조건, 사용자가 직접 실행할 `/goal` 활성화 안내를 제시한다.
