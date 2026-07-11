@@ -26,7 +26,7 @@ deep-goal은 요청을 평가하고, 필요하면 재구성하고, 컴파일된 
 
 ### 방법 1 — 로컬 clone (항상 동작, 마켓플레이스 등록 불필요)
 
-```bash
+```text
 # Claude Code
 claude plugin add https://github.com/Sungmin-Cho/claude-deep-goal.git
 
@@ -40,7 +40,7 @@ clone 즉시 동작합니다. 마켓플레이스 등록 여부와 무관합니�
 > **전제**: deep-goal이 deep-suite 마켓플레이스에 등록되어야 합니다(`.claude-plugin/marketplace.json`에 40자 merge SHA 업데이트). 이 단계는 이 저장소가 `main`에 머지된 이후 수행됩니다.
 
 등록 완료 후:
-```bash
+```text
 # 1단계 — deep-suite 마켓플레이스 소스 추가 (미추가 시)
 /plugin marketplace add Sungmin-Cho/claude-deep-suite
 
@@ -70,11 +70,28 @@ $deep-goal:deep-goal
 $deep-goal:deep-goal <장기 작업>
 ```
 
-### SDK / 프로그래밍 호출 (Claude·Codex 공통, 사용자 진입 아님)
+### Claude Code SDK / 프로그래밍 호출
 
 ```js
 Skill({ skill: "deep-goal:deep-goal", args: "<task>" })
 ```
+
+이 프로그래밍 호출은 Claude Code/Agent SDK 기능입니다. Codex는 네이티브
+`$deep-goal:deep-goal` 진입으로 설치된 스킬을 로드하며 Claude의 `Skill({...})` API를 호출하도록
+안내하지 않습니다.
+
+---
+
+## 런타임 호환성
+
+- **런타임 하한**: Node.js 22가 휴대 가능한 사전 준비물 `scout`, 증명 `evaluate-proof`, 릴리스
+  검증 경로를 실행합니다.
+- **운영체제**: Linux, macOS, 네이티브 Windows 11을 지원하며 Git Bash가 필요하지 않고 POSIX
+  유틸리티를 요구하지 않습니다.
+- **공유 동작**: Claude Code `/deep-goal`과 Codex `$deep-goal:deep-goal`은 동일한 absolute Node
+  helper를 해석하고 project root를 별도 인자로 전달합니다.
+- **정직한 degraded mode**: 런타임 부재, project 접근 실패, null/non-Git baseline은 fail-closed
+  **미검증(unverified)** 상태를 유지하며 ready-to-run으로 승격하지 않습니다.
 
 ---
 

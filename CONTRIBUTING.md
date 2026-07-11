@@ -1,56 +1,65 @@
 # Contributing to deep-goal
 
-Thanks for your interest in improving **deep-goal** — the goal condition compiler
-for the [Deep Suite](https://github.com/Sungmin-Cho/claude-deep-suite) plugin family
-across Claude Code and Codex.
+Thanks for improving **deep-goal**, the goal condition compiler for the
+[Deep Suite](https://github.com/Sungmin-Cho/claude-deep-suite) plugin family across Claude Code and
+Codex.
 
-deep-goal is a content-only plugin (skills + reference docs, no `hooks/` or `agents/`).
-It evaluates a long-running task request, reshapes it to fit the native `/goal`
-feature, scouts prerequisites, and compiles a ready-to-paste `/goal` condition.
+deep-goal is content-only: it ships no `hooks/`, no `agents/`, no `.mcp.json`, and no MCP server.
+Keep it a one-shot compiler with no persistent runtime state.
+
+## Requirements
+
+- Node.js 22
+- Git
+- Linux, macOS, or native Windows 11; contributors work without Git Bash or POSIX utility
+  requirements
 
 ## Getting started
 
-```bash
+```text
 git clone https://github.com/Sungmin-Cho/claude-deep-goal.git
 cd claude-deep-goal
 ```
 
-There is no install step — the verification harness is a hermetic, dependency-free
-grep-based lint (Node 20+ is used only to parse the JSON manifests).
+There are no package dependencies to install. The verification surface uses Node built-ins.
 
 ## Local checks
 
-```bash
-npm run verify       # = bash scripts/verify-plugin.sh && bash scripts/verify-selftest.sh
+Run both commands from the repository root:
+
+```text
+npm test
+npm run verify
 ```
 
-- **`verify-plugin.sh`** — release-lint: file existence, skill frontmatter, content
-  invariants (activation model, the 4 compile elements, evaluator-surfacing rule,
-  self-containment), version triple-sync, CHANGELOG entry, no placeholder tokens, and
-  the `hooks/` / `agents/` non-goals.
-- **`verify-selftest.sh`** — negative self-test that confirms `verify-plugin.sh`
-  actually catches violations (so the checker can't silently rot).
+- `npm test` runs the full `node --test` suite.
+- `npm run verify` invokes `node scripts/verify-plugin.js`; that entry uses
+  `scripts/lib/release-validator.js` before running the same Node test surface.
 
-Everything must be green before you open a PR.
+Both commands are shell-neutral and support native Windows 11 with no requirement for Git Bash.
+Everything must be green before a pull request.
+
+The installed Codex Python validator is a maintainer-local authoritative preflight. The repository's
+portable contract is the Node release validator plus the Codex contract tests, which run on all three
+CI operating systems.
 
 ## Conventions
 
-- **Documentation** follows [`docs/DOCS_RULE.md`](docs/DOCS_RULE.md) (local maintainer
-  guide — single-source-of-truth rules for README / CHANGELOG / agent guides).
-- **Version triple-sync**: `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`,
-  and `package.json` must always carry the same version. `npm run verify` enforces this.
-- **CHANGELOG**: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) +
-  [Semantic Versioning](https://semver.org/spec/v2.0.0.html), bilingual
-  (`CHANGELOG.md` + `CHANGELOG.ko.md`, structurally identical).
-- **Non-goals**: v1 ships no `hooks/` and no `agents/` — keep it a one-shot compiler.
+- **Documentation** follows [`docs/DOCS_RULE.md`](docs/DOCS_RULE.md), the local maintainer source of
+  truth for README, CHANGELOG, and agent-guide synchronization.
+- **Version triple-sync**: `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`, and
+  `package.json` must carry the same version.
+- **CHANGELOG**: maintain matching English and Korean Keep a Changelog structures. Do not add test
+  counts, review narration, commit hashes, or internal function names to release notes.
+- **Runtime boundary**: preserve Node.js 22 portability, separate argv, fail-closed proof handling,
+  and the content-only no-hooks/no-agents/no-MCP contract.
 
 ## Pull requests
 
 1. Branch from `main`.
-2. Keep changes focused; update both `CHANGELOG.md` and `CHANGELOG.ko.md` when behavior
-   changes.
-3. Run `npm run verify` and make sure it is green.
-4. Explain what changed and why.
+2. Keep changes focused and update both bilingual documentation surfaces when behavior changes.
+3. Run `npm test` and `npm run verify`.
+4. Explain what changed, why, and which portable checks prove it.
 
 ## Reporting issues
 

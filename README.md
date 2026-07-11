@@ -26,7 +26,7 @@ This is by design: the native `/goal` UI, evaluator, session-resume, and auto-cl
 
 ### Option 1 — Local clone (always works, no marketplace required)
 
-```bash
+```text
 # Claude Code
 git clone https://github.com/Sungmin-Cho/claude-deep-goal.git
 claude plugin add https://github.com/Sungmin-Cho/claude-deep-goal.git
@@ -41,7 +41,7 @@ This path works from the moment you clone. No marketplace registration dependenc
 > **Prerequisite**: deep-goal must be registered in the deep-suite marketplace (`.claude-plugin/marketplace.json` updated with the 40-character merge SHA). This step follows the merge of this repository to `main`.
 
 Once registered:
-```bash
+```text
 # Step 1 — add the deep-suite marketplace source (if not already added)
 /plugin marketplace add Sungmin-Cho/claude-deep-suite
 
@@ -71,11 +71,27 @@ Without arguments, deep-goal asks: *"What do you want to run to completion?"*
 $deep-goal:deep-goal <your long-running task>
 ```
 
-### SDK / programmatic (Claude + Codex, not user entry)
+### Claude Code SDK / programmatic
 
 ```js
 Skill({ skill: "deep-goal:deep-goal", args: "<task>" })
 ```
+
+This programmatic form is a Claude Code/Agent SDK capability. Codex loads the installed skill through
+its native `$deep-goal:deep-goal` entry and is not instructed to call Claude's `Skill({...})` API.
+
+---
+
+## Runtime compatibility
+
+- **Runtime floor**: Node.js 22 powers the portable prerequisite `scout`, proof `evaluate-proof`, and
+  release-verification paths.
+- **Operating systems**: Linux, macOS, and native Windows 11 are supported without Git Bash or POSIX
+  utility requirements.
+- **Shared behavior**: Claude Code `/deep-goal` and Codex `$deep-goal:deep-goal` resolve the same
+  absolute Node helper and pass the project root as a separate argument.
+- **Honest degradation**: a missing runtime, inaccessible project, or null/non-Git baseline stays
+  fail-closed as **unverified**; deep-goal never promotes that result to ready-to-run.
 
 ---
 
