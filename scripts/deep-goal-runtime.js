@@ -1,3 +1,4 @@
+import { accessSync, constants, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import {
@@ -30,7 +31,11 @@ function parseArguments(argv) {
     if (!allowed.has(option)) throw new ArgumentError(`unknown option: ${option}`);
     if (Object.hasOwn(options, option)) throw new ArgumentError(`duplicate option: ${option}`);
     if (index + 1 >= tokens.length) throw new ArgumentError(`missing value for ${option}`);
-    options[option] = tokens[index + 1];
+    const value = tokens[index + 1];
+    if (value.startsWith('--')) {
+      throw new ArgumentError(`invalid value for ${option}: option token ${value}`);
+    }
+    options[option] = value;
     index += 2;
   }
 
@@ -53,6 +58,8 @@ function parseArguments(argv) {
 function run(argv) {
   const { command, options } = parseArguments(argv);
   const cwd = resolve(options['--cwd']);
+  if (!statSync(cwd).isDirectory()) throw new Error(`cwd is not a directory: ${cwd}`);
+  accessSync(cwd, constants.R_OK | constants.X_OK);
   if (command === 'scout') return scoutPrerequisites({ cwd });
 
   let detected = null;

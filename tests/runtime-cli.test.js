@@ -119,12 +119,59 @@ test('strict argument errors exit 2 without JSON on stdout', () => {
   assert.match(result.stderr, /unknown option/i);
 });
 
+test('option-like tokens cannot be consumed as required option values', () => {
+  const malformed = [
+    ['scout', '--cwd', '--cwd'],
+    ['scout', '--cwd', '--unknown'],
+    ['evaluate-proof', '--cwd', '--text', '--text', 'npm test'],
+    ['evaluate-proof', '--cwd', '--unknown', '--text', 'npm test'],
+    ['evaluate-proof', '--cwd', projectWithSpaces, '--text', '--baseline', 'HEAD'],
+    ['evaluate-proof', '--cwd', projectWithSpaces, '--text', '--unknown'],
+  ];
+
+  for (const args of malformed) {
+    const result = runCli(args);
+    assert.equal(result.status, 2, `${args.join(' ')}\n${result.stderr}`);
+    assert.equal(result.stdout, '', args.join(' '));
+    assert.match(
+      result.stderr,
+      /^deep-goal-runtime: argument error: (?:missing|invalid) value/i,
+      args.join(' '),
+    );
+  }
+});
+
 test('operational errors exit 1 without JSON on stdout', () => {
   const result = runCli(['scout', '--cwd', join(root, 'missing project')]);
 
   assert.equal(result.status, 1, result.stderr);
   assert.equal(result.stdout, '');
   assert.match(result.stderr, /^deep-goal-runtime: operational error:/);
+});
+
+test('evaluate-proof rejects a missing cwd with or without explicit probe fields', () => {
+  const missing = join(root, 'missing evaluate project');
+  const invocations = [
+    ['evaluate-proof', '--cwd', missing, '--text', 'npm test'],
+    [
+      'evaluate-proof',
+      '--cwd',
+      missing,
+      '--text',
+      'npm test',
+      '--probe-status',
+      'confirmed',
+      '--detected-command',
+      'npm test',
+    ],
+  ];
+
+  for (const args of invocations) {
+    const result = runCli(args);
+    assert.equal(result.status, 1, result.stderr);
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, /^deep-goal-runtime: operational error:/);
+  }
 });
 
 test('baseline-bound file proof is objective only for a fresh committed artifact', () => {
