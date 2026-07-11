@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve, sep } from 'node:path';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 const SCRIPT_PRIORITY = ['verify', 'test', 'build', 'lint', 'typecheck', 'type-check', 'check'];
 const SUBJECTIVE_MARKERS = [
@@ -27,10 +27,30 @@ const COMMAND_SHAPES = [
   /^tsc /,
   /--noEmit/,
 ];
+const canonicalize = realpathSync.native ?? realpathSync;
+
+function containedExistingPath(physicalRoot, file) {
+  let physicalFile;
+  try {
+    physicalFile = canonicalize(file);
+  } catch {
+    return null;
+  }
+  const fromRoot = relative(physicalRoot, physicalFile);
+  if (fromRoot === '..' || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) return null;
+  return physicalFile;
+}
 
 export function detectProofCommand({ cwd = process.cwd() } = {}) {
-  const packagePath = resolve(cwd, 'package.json');
-  if (existsSync(packagePath)) {
+  let physicalRoot;
+  try {
+    physicalRoot = canonicalize(cwd);
+  } catch {
+    return { status: 'unconfirmed', command: null, note: null };
+  }
+
+  const packagePath = containedExistingPath(physicalRoot, resolve(cwd, 'package.json'));
+  if (packagePath) {
     let parsed;
     try {
       parsed = JSON.parse(readFileSync(packagePath, 'utf8'));
@@ -50,13 +70,17 @@ export function detectProofCommand({ cwd = process.cwd() } = {}) {
     }
     return { status: 'unconfirmed', command: 'npm test', note: null };
   }
-  if (['pyproject.toml', 'pytest.ini', 'setup.cfg'].some((name) => existsSync(resolve(cwd, name)))) {
+  if (
+    ['pyproject.toml', 'pytest.ini', 'setup.cfg'].some((name) =>
+      containedExistingPath(physicalRoot, resolve(cwd, name)),
+    )
+  ) {
     return { status: 'unconfirmed', command: 'pytest', note: null };
   }
-  if (existsSync(resolve(cwd, 'go.mod'))) {
+  if (containedExistingPath(physicalRoot, resolve(cwd, 'go.mod'))) {
     return { status: 'unconfirmed', command: 'go test ./...', note: null };
   }
-  if (existsSync(resolve(cwd, 'Cargo.toml'))) {
+  if (containedExistingPath(physicalRoot, resolve(cwd, 'Cargo.toml'))) {
     return { status: 'unconfirmed', command: 'cargo test', note: null };
   }
   return { status: 'unconfirmed', command: null, note: null };

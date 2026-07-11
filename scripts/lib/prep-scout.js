@@ -1,6 +1,5 @@
 import { spawnSync } from 'node:child_process';
 import {
-  existsSync,
   lstatSync,
   readFileSync,
   readdirSync,
@@ -100,10 +99,11 @@ function discoverWorkflows(root, physicalRoot) {
     .map((entry) => portableRelative(root, resolve(workflowRoot, entry.name)));
 }
 
-function discoverMakeTargets(root) {
+function discoverMakeTargets(root, physicalRoot) {
   const makefile = resolve(root, 'Makefile');
-  if (!existsSync(makefile)) return [];
-  const source = readFileSync(makefile, 'utf8');
+  const physicalMakefile = containedExistingPath(physicalRoot, makefile);
+  if (!physicalMakefile) return [];
+  const source = readFileSync(physicalMakefile, 'utf8');
   const targets = [];
   const seen = new Set();
   for (const match of source.matchAll(MAKE_TARGET)) {
@@ -145,6 +145,6 @@ export function scoutPrerequisites({ cwd = process.cwd() } = {}) {
         ...discoverKnownFiles(projectRoot, physicalRoot, CI_FILES),
       ].sort(),
     },
-    makeTargets: discoverMakeTargets(projectRoot),
+    makeTargets: discoverMakeTargets(projectRoot, physicalRoot),
   };
 }

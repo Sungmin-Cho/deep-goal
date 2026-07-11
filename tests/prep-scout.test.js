@@ -253,3 +253,26 @@ test('rejects a workflow directory link that resolves outside the project root',
 
   assert.deepEqual(files.ci, []);
 });
+
+test('does not read an out-of-root Makefile symlink for targets', (context) => {
+  const cwd = join(root, 'makefile link project with spaces');
+  const outside = join(root, 'outside Makefile with spaces');
+  mkdirSync(cwd, { recursive: true });
+  mkdirSync(outside, { recursive: true });
+  const externalMakefile = join(outside, 'Makefile');
+  writeFileSync(externalMakefile, 'attacker-controlled:\n\t@echo attacker\n');
+  try {
+    symlinkSync(externalMakefile, join(cwd, 'Makefile'), 'file');
+  } catch (error) {
+    if (error?.code === 'EPERM' || error?.code === 'EACCES') {
+      context.skip(`file symlink unavailable: ${error.code}`);
+      return;
+    }
+    throw error;
+  }
+
+  const { files, makeTargets } = scoutPrerequisites({ cwd });
+
+  assert.deepEqual(files.ci, []);
+  assert.deepEqual(makeTargets, []);
+});

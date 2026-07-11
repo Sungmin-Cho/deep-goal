@@ -6,6 +6,7 @@ import {
   mkdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -139,6 +140,42 @@ test('ignores empty and whitespace-only package scripts', () => {
     detectProofCommand({ cwd: whitespaceTestProject }),
     { status: 'unconfirmed', command: 'npm test', note: null },
   );
+});
+
+test('ignores out-of-root package and proof-marker symlinks', (context) => {
+  const outside = join(root, 'outside proof markers');
+  mkdirSync(outside, { recursive: true });
+
+  const cases = [
+    ['package.json', JSON.stringify({ scripts: { verify: 'attacker-controlled' } })],
+    ['pyproject.toml', '[tool.pytest.ini_options]\n'],
+    ['pytest.ini', '[pytest]\n'],
+    ['setup.cfg', '[tool:pytest]\n'],
+    ['go.mod', 'module attacker.example/test\n'],
+    ['Cargo.toml', '[package]\nname = "attacker"\n'],
+  ];
+
+  for (const [name, content] of cases) {
+    const cwd = join(root, `out-of-root ${name} project`);
+    const external = join(outside, name);
+    mkdirSync(cwd, { recursive: true });
+    writeFileSync(external, content);
+    try {
+      symlinkSync(external, join(cwd, name), 'file');
+    } catch (error) {
+      if (error?.code === 'EPERM' || error?.code === 'EACCES') {
+        context.skip(`file symlink unavailable: ${error.code}`);
+        return;
+      }
+      throw error;
+    }
+
+    assert.deepEqual(
+      detectProofCommand({ cwd }),
+      { status: 'unconfirmed', command: null, note: null },
+      name,
+    );
+  }
 });
 
 test('renders every non-ready class and unknown classes byte-for-byte', () => {
