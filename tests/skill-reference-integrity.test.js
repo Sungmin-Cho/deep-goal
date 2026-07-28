@@ -797,10 +797,30 @@ test('every referenced plugin path resolves inside the root', () => {
   const patterns = [
     // Trailing boundary, same reason as the guard: without it `.js` matches the
     // prefix of `.json` and the resolver reports files that never existed.
-    [/<absolute-plugin-root>\/([A-Za-z0-9._/-]+\.(?:md|js|sh|json|yaml)(?![A-Za-z0-9]))/g, false],
-    [/`(\.\.\/[A-Za-z0-9._/-]+\.md)(?:#[a-z0-9-]+)?`/g, true],
-    [/\]\((\.\.?\/[A-Za-z0-9._/-]+\.md)\)/g, true],
+    [/<absolute-plugin-root>[\\/]([A-Za-z0-9._\\/-]+\.(?:md|js|sh|json|yaml)(?![A-Za-z0-9]))/g, false],
+    [/`(\.\.[\\/][A-Za-z0-9._\\/-]+\.md)(?:#[a-z0-9-]+)?`/g, true],
+    [/\]\((\.\.?[\\/][A-Za-z0-9._\\/-]+\.md)\)/g, true],
   ];
+
+  // Either separator in every pattern. This resolver reads the raw body on
+  // purpose, so normalizePath never reaches it and each pattern has to accept
+  // `\` itself. Slash-only left the backslash spelling of an out-of-root
+  // reference visible to the classifier but INVISIBLE here — the layer that
+  // actually checks containment. A failure count hides exactly that, because the
+  // classifier keeps the total non-zero; only naming the tests that fired shows
+  // which layer went quiet. One sample per pattern, both spellings.
+  const samples = [
+    ['<absolute-plugin-root>/../workspace/evil.json',
+      '<absolute-plugin-root>\\..\\workspace\\evil.json'],
+    ['`../shared/x.md`', '`..\\shared\\x.md`'],
+    ['[l](../shared/x.md)', '[l](..\\shared\\x.md)'],
+  ];
+  patterns.forEach(([re], i) => {
+    for (const spelling of samples[i]) {
+      re.lastIndex = 0;
+      assert.ok(re.exec(spelling), `pattern ${i} must see both spellings: ${spelling}`);
+    }
+  });
   const broken = [];
   let resolved = 0;
   const realRoot = realpathSync(ROOT);
@@ -810,7 +830,13 @@ test('every referenced plugin path resolves inside the root', () => {
       re.lastIndex = 0;
       let m;
       while ((m = re.exec(body))) {
-        const target = isRelative ? resolve(dirname(file), m[1]) : join(ROOT, m[1]);
+        // Normalising the capture is load-bearing but NOT pinned: removing it
+        // breaks no test, because no shipped document uses the backslash
+        // spelling yet. The failure would first appear as a false `missing` on
+        // a file that exists. Recorded, not claimed.
+        const target = isRelative
+          ? resolve(dirname(file), normalizePath(m[1]))
+          : join(ROOT, normalizePath(m[1]));
         if (!existsSync(target)) {
           broken.push(`${relative(ROOT, file)} -> ${m[1]} (missing)`);
           continue;
