@@ -63,8 +63,9 @@ stdout을 proof로 소비하지 않는다.
 ### Step 2: proof command 해석
 
 runtime은 `package.json` scripts를 `verify`, `test`, `build`, `lint`, `typecheck`, `type-check`, `check`
-순서로 읽는다. 발견된 script만 `confirmed`다. 손상 JSON은 `parse-error:package.json` note와 함께
-`unconfirmed`; 확장자 기반 `pytest`, `go test ./...`, `cargo test` 추정도 `unconfirmed`다.
+순서로 읽는다. 발견된 script만 `confirmed`다. 손상 JSON은 command 없이 `parse-error:package.json`
+note와 함께 `unconfirmed`다. 나머지 추정은 모두 `unconfirmed`로 나온다 — `package.json`은 있지만
+우선순위 script가 없으면 `npm test`, manifest 기반 `pytest` · `go test ./...` · `cargo test`.
 
 Makefile과 CI 파일은 텍스트로만 발견한다. scout 단계에서 Makefile target이나 repo-controlled script를
 실행하지 않는다.
