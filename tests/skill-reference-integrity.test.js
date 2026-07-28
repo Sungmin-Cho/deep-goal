@@ -608,7 +608,19 @@ test('no undeclared path under a non-shipped directory is named', () => {
   // only against the workspace. Each one must be declared in NON_SHIPPED, which
   // forces the caveat test to cover it.
   const escaped = GITIGNORED_DIRS.map((d) => d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-  const NON_SHIPPED_DIRS = new RegExp(String.raw`(?:^|[\s\`"'(])((?:${escaped})\/[A-Za-z0-9._/-]+)`, 'g');
+  // Either separator. This check is lexical over raw lines on purpose — that is
+  // what makes it immune to the skip-set blind spot — and for the same reason
+  // normalizePath never reaches it, so `\` has to be spelled out here. With `/`
+  // alone, `docs\backlog.md` named an undeclared non-shipped path and nothing
+  // objected, while the slash spelling was rejected.
+  const NON_SHIPPED_DIRS = new RegExp(String.raw`(?:^|[\s\`"'(])((?:${escaped})[\\/][A-Za-z0-9._\\/-]+)`, 'g');
+  // Both spellings, on the axis rather than on the tree.
+  for (const spelling of ['docs/backlog.md', 'docs\\backlog.md']) {
+    NON_SHIPPED_DIRS.lastIndex = 0;
+    assert.ok(NON_SHIPPED_DIRS.exec(`See \`${spelling}\` for the rest.`),
+      `undeclared-path check must see both spellings: ${spelling}`);
+  }
+
   const undeclared = [];
   for (const file of markdownFiles()) {
     readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
