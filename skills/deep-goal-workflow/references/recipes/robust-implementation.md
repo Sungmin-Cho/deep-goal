@@ -60,7 +60,9 @@ deep-work의 구조적 4단계 진행과 deep-review-loop의 자동 수렴 게�
 2. **모든 승인 게이트(Plan 승인·Implement Exit Gate) 통과가 대화에 보고됨** — 이 게이트는 종료조건의 일부이며, 보고 없이는 평가자가 종료를 판정할 수 없다
 3. 최종 deep-review-loop verdict가 APPROVE
 4. 테스트 전체 통과
-5. **검증가능 anchor 확보**: `/deep-finish`를 종료 스텝으로 실행해 `$WORK_DIR/session-receipt.json`(M3 envelope: producer=deep-work, artifact_kind=session-receipt, schema.name=session-receipt)을 emit한다. 이 receipt가 **현재 goal 세션**에서 나왔고(session/work dir 일치) **이전 세션 산출물이 아님**(stale 거부 — `test_completed_at` 최신성)을 대화에 보고한다. 순수 self-report paste보다 이 tamper-evident anchor를 우선한다.
+5. **검증가능 anchor 확보**: `/deep-finish`를 종료 스텝으로 실행해 `$WORK_DIR/session-receipt.json`(M3 envelope: producer=deep-work, artifact_kind=session-receipt, schema.name=session-receipt)을 emit한다. 다음 세 가지를 대화에 보고한다 — payload의 **`x-test-verified: true`**, 이 receipt가 **현재 goal 세션**에서 나왔음(session/work dir 일치), **이전 세션 산출물이 아님**(stale 거부 — payload `started_at`/`finished_at` 최신성). 순수 self-report paste보다 이 tamper-evident anchor를 우선한다.
+
+> **receipt 존재만으로는 테스트 통과가 증명되지 않는다.** deep-finish는 test가 실패한 세션에서도 receipt를 emit하고, `outcome`을 그대로 둔 채 payload에 `x-test-verified: false`만 기록한다. 따라서 `x-test-verified: true`를 종료조건에 명시하지 않으면 이 anchor는 self-report보다 나을 게 없다.
 
 ---
 
@@ -72,8 +74,8 @@ deep-work의 구조적 4단계 진행과 deep-review-loop의 자동 수렴 게�
 deep-work 세션으로 <기능>을 Research→Plan→Implement→Test 순으로 진행한다.
 deep-work의 Plan 승인과 Implement 완료 직후 Exit Gate에서는 사용자에게 승인을 요청하고, 승인이 대화에 보고된 뒤에만 다음 단계로 진행한다(승인 전 자율 진행 금지 — 이 게이트는 종료조건의 일부다).
 Implement 완료 직후 deep-review-loop(--max=3)를 돌려 verdict가 APPROVE가 될 때까지 대응한다.
-Test 통과 후 `/deep-finish`를 실행해 `session-receipt.json`(producer=deep-work·artifact_kind=session-receipt)을 emit하고, 그 receipt가 현재 세션 산출물임(이전 세션 아님)을 대화에 보고한다.
-종료조건: 모든 phase 완료 AND 모든 승인 게이트(Plan 승인·Exit Gate) 통과가 보고됨 AND 최종 deep-review-loop APPROVE AND 테스트 전체 통과 AND `/deep-finish` session-receipt.json 확보(현재 세션·stale 아님).
+Test 통과 후 `/deep-finish`를 실행해 `session-receipt.json`(producer=deep-work·artifact_kind=session-receipt)을 emit하고, payload의 `x-test-verified` 값과 그 receipt가 현재 세션 산출물임(이전 세션 아님)을 대화에 보고한다.
+종료조건: 모든 phase 완료 AND 모든 승인 게이트(Plan 승인·Exit Gate) 통과가 보고됨 AND 최종 deep-review-loop APPROVE AND `/deep-finish` session-receipt.json 확보(현재 세션·stale 아님) AND 그 payload의 `x-test-verified`가 true.
 각 단계 결과(phase 전환·승인 게이트·review verdict·테스트 출력)를 대화에 명시적으로 보고할 것.
 or stop after 40 turns.
 ```
@@ -90,11 +92,11 @@ or stop after 40 turns.
 - Test Exit Gate 통과 보고됨
 - deep-review-loop(--max=3) verdict APPROVE
 - 테스트 전체 통과
-- /deep-finish 실행으로 session-receipt.json 확보 (아래 검증가능 anchor 계약)
+- /deep-finish 실행으로 session-receipt.json 확보, payload의 x-test-verified가 true (아래 검증가능 anchor 계약)
 
 변경 금지: <불변 제약>
 검증: <테스트 커맨드> 전체 통과
-검증가능 anchor: Test 통과 후 `/deep-finish`가 emit하는 `$WORK_DIR/session-receipt.json`(producer=deep-work, artifact_kind=session-receipt, schema.name=session-receipt)을 증명으로 참조. 이 receipt가 현재 goal 세션 산출물(session/work dir 일치)이고 이전 세션 아님(stale 거부 — test_completed_at 최신성)을 진행 로그에 기록. 순수 self-report 로그보다 이 tamper-evident anchor를 우선.
+검증가능 anchor: Test 통과 후 `/deep-finish`가 emit하는 `$WORK_DIR/session-receipt.json`(producer=deep-work, artifact_kind=session-receipt, schema.name=session-receipt)을 증명으로 참조. payload의 `x-test-verified`가 true인지, 이 receipt가 현재 goal 세션 산출물(session/work dir 일치)인지, 이전 세션 아님(stale 거부 — payload started_at/finished_at 최신성)을 진행 로그에 기록. receipt는 test 실패 세션에서도 emit되므로 x-test-verified 확인이 필수다. 순수 self-report 로그보다 이 tamper-evident anchor를 우선.
 
 각 phase 전환·게이트 결과를 진행 로그에 명시 기록.
 pause 지점: Plan 승인 요청, Exit Gate 확인.
@@ -113,7 +115,7 @@ deep-work의 **Plan 승인은 필수 사용자 인터랙션**이다(`deep-work-w
 - Research 완료 직후 → Exit Gate (진행 / 재실행 / 일시정지)
 - Plan 완료 직후 → Exit Gate (진행 / 재실행 / 일시정지)
 - Implement 완료 직후 → Exit Gate (진행 / 재실행 / 일시정지)
-- Test 완료 직후 → Exit Gate (Integrate 진행 또는 Finish)
+- Test 완료 직후 → Exit Gate 4지선다 (Integrate 진행 / Integrate 건너뛰고 Finish / Test 재실행 / 일시정지)
 - Phase 5 Integrate: Exit Gate 형식이 아닌 **interactive recommendation loop 자체가 게이트 역할** (deep-work-workflow/SKILL.md 명세)
 
 ### deep-review-loop 상한
@@ -126,11 +128,12 @@ Claude 평가자(Haiku)는 도구를 호출하지 않고 대화에 표면화된 
 
 ### 검증가능 anchor 우선 (self-report 신뢰 한계)
 
-Haiku 평가자는 self-report를 독립 검증하지 않는다. deep-work는 Test 통과 후 `/deep-finish`가 `session-receipt.json`(tamper-evident M3 envelope)을 emit하므로, 증명 방법을 이 receipt 참조로 컴파일한다:
+Haiku 평가자는 self-report를 독립 검증하지 않는다. `/deep-finish`가 emit하는 `session-receipt.json`(tamper-evident M3 envelope)을 증명 방법으로 컴파일한다:
 
 - **경로**: `$WORK_DIR/session-receipt.json`
 - **identity**: producer=deep-work, artifact_kind=`session-receipt`, schema.name=`session-receipt`
+- **테스트 검증 신호**: payload의 `x-test-verified`. deep-finish는 emit 시점에 세션 state의 `test_passed` 마커를 읽어 이 필드를 찍고, **값이 false여도 receipt를 emit하며 `outcome`을 고쳐 쓰지 않는다**. 따라서 receipt의 존재가 아니라 `x-test-verified: true`가 anchor다.
 - **현재-세션 바인딩**: receipt의 session/work dir가 현재 goal 세션과 일치
-- **stale 거부**: 이전 세션 receipt 불인정(`test_completed_at`/`started_at` 최신성 확인)
+- **stale 거부**: 이전 세션 receipt 불인정 — receipt payload의 `started_at`/`finished_at` 최신성으로 확인한다. `test_completed_at`은 세션 state 필드이고 receipt payload에는 없다.
 
-세션 내부 state 필드(`test_passed`)나 중간 로그는 참고 증거로만 언급하고 **기본 anchor로 쓰지 않는다**(가변 state는 anti-tamper 부적격).
+세션 내부 state 필드(`test_passed`)를 직접 읽어 anchor로 쓰지 않는다(가변 state는 anti-tamper 부적격). receipt에 봉인된 `x-test-verified`가 그 마커의 검증 가능한 형태다.
