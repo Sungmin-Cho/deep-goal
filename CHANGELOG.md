@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Duplicated verification, directory-tree and release-workflow sections that restated what the manifests and `npm run verify` already define.
 
+### Fixed
+
+- The `robust-implementation` recipe treated the existence of a deep-work session receipt as proof that the session finished verified. deep-work emits that receipt whether or not its Test phase passed, so compiled conditions now require `x-test-verified: true` on the receipt and judge staleness by fields the receipt actually carries.
+- Recipes and README now name deep-work's Spec phase; a compiled condition that listed Research→Plan→Implement→Test told the agent past a gated phase.
+- `ship-and-document` still orders review before `wiki-ingest`, but for the right reason: deep-wiki journals the commit and recovers an interrupted one — what cannot be undone is a completed ingest.
+- The prerequisite-scouting reference now describes every unconfirmed proof-command guess, including the `npm test` fallback it omitted.
+
 ### Security
 
 - Every plugin file a skill tells an agent to open or run is now anchored at the installed plugin root, so a repository under analysis can no longer shadow a deep-goal document or script with a same-named file of its own. A reference-integrity test enforces the rule and fails the build on a bare path.

@@ -19,6 +19,13 @@
 
 - manifest와 `npm run verify`가 이미 정의하는 내용을 되풀이하던 검증·디렉터리 트리·릴리스 워크플로우 중복 섹션을 삭제했다.
 
+### 수정됨
+
+- `robust-implementation` 레시피가 deep-work session receipt의 존재만으로 검증된 세션 완료를 증명한다고 보았다. deep-work는 Test 실패 세션에서도 receipt를 emit하므로, 컴파일되는 조건이 receipt의 `x-test-verified: true`를 요구하고 receipt가 실제로 담고 있는 필드로 stale 여부를 판정하도록 고쳤다.
+- 레시피와 README가 deep-work의 Spec phase를 명시한다. Research→Plan→Implement→Test만 나열한 조건은 게이트가 걸린 phase를 건너뛰라고 지시하는 셈이었다.
+- `ship-and-document`은 여전히 review를 `wiki-ingest`보다 먼저 두지만 근거를 바로잡았다 — deep-wiki는 커밋을 journal로 감싸 중단된 ingest를 복구한다. 되돌릴 수 없는 것은 완료된 ingest다.
+- 사전 준비물 탐색 reference가 누락했던 `npm test` 폴백을 포함해 모든 unconfirmed 증명 커맨드 추정을 기술한다.
+
 ### 보안
 
 - 스킬이 열거나 실행하라고 지시하는 모든 플러그인 파일 경로를 설치된 plugin root에 anchor했다. 분석 대상 저장소가 동명 파일로 deep-goal 문서나 스크립트를 shadowing할 수 없다. reference-integrity 테스트가 이 규칙을 강제하며 bare 경로가 있으면 빌드가 실패한다.
