@@ -626,20 +626,30 @@ test('a backslash separator does not hide a path from the guard', () => {
   // a legitimate spelling and not a typo, and one character bypassed the whole
   // deny-by-default invariant.
   //
-  // Each pair is [slash, backslash]; both sides must be flagged, and the pair
-  // is asserted together so a future edit cannot fix one and drop the other.
-  const pairs = [
-    ['Run `node scripts/deep-goal-runtime.js` to start.',
-     'Run `node scripts\\deep-goal-runtime.js` to start.'],
-    ['Read `skills/deep-goal/SKILL.md` first.',
-     'Read `skills\\deep-goal\\SKILL.md` first.'],
-    ['the CLI lives at `scripts/lib/proof-gate.js`',
-     'the CLI lives at `scripts\\lib\\proof-gate.js`'],
+  // The bypass table from review, used verbatim as the fixture. Mixed
+  // separators matter as much as pure backslash: a rule that learned to
+  // recognise "a backslash path" as a second shape would still miss
+  // `scripts\lib/proof-gate.js`. That is why the fix normalises at
+  // tokenisation instead of teaching each matcher a new form — every rule
+  // underneath, present and future, sees one canonical spelling.
+  const TABLE = [
+    ['unanchored slash', 'Run `node scripts/deep-goal-runtime.js` to start.'],
+    ['unanchored backslash', 'Run `node scripts\\deep-goal-runtime.js` to start.'],
+    ['read-verb slash', 'Read `scripts/lib/proof-gate.js`'],
+    ['read-verb backslash', 'Read `scripts\\lib\\proof-gate.js`'],
+    ['mixed separators', 'Run `node scripts\\lib/proof-gate.js` to start.'],
+    ['read-verb mixed', 'Read `skills/deep-goal\\SKILL.md` first.'],
   ];
-  for (const [slash, backslash] of pairs) {
-    assert.ok(shadowableTokens(slash).length > 0, `slash form must be flagged: ${slash}`);
-    assert.ok(shadowableTokens(backslash).length > 0, `backslash form must be flagged: ${backslash}`);
+  for (const [label, line] of TABLE) {
+    assert.ok(shadowableTokens(line).length > 0, `${label} must be flagged: ${line}`);
   }
+
+  // An anchored traversal written with backslashes is still a traversal, and
+  // must be rejected for that reason rather than as "unanchored".
+  const traversal = shadowableTokens('node "<absolute-plugin-root>\\..\\workspace\\evil.json"');
+  assert.ok(traversal.length > 0, 'anchored backslash traversal must be flagged');
+  assert.equal(traversal[0].why, 'escapes plugin root',
+    `traversal must fail on containment, not anchoring: ${JSON.stringify(traversal)}`);
 
   // Escape parity: a doubled backslash is how the same path appears inside a
   // string literal, and separator runs collapse, so it resolves identically.
@@ -662,10 +672,19 @@ test('a backslash separator does not hide a path from the guard', () => {
   assert.ok(shadowableTokens('Read `skills\\zzz\\missing.md` before starting.').length > 0,
     'a FORM must match a backslash path body, even when nothing resolves');
 
-  // Normalisation is not a licence to flag prose: a token still only counts
-  // once it resolves to a real file in the plugin.
-  assert.deepEqual(shadowableTokens('escape a quote with \\" and a backslash with \\\\'), [],
-    'prose containing backslashes must not be flagged');
+  // Normalisation must not promote non-path text into a path. Collapsing
+  // separator runs makes over-flagging the failure mode to watch, so prose
+  // about escapes and regexes is asserted to stay silent — a token still only
+  // counts once it resolves to a real file in the plugin.
+  for (const prose of [
+    'escape a quote with \\" and a backslash with \\\\',
+    'Use `\\n` for a newline and `\\t` for a tab.',
+    'A literal backslash is written `\\\\` in a JS string literal.',
+    'The validator matches /^[A-Za-z]+\\/[a-z-]+$/ against each entry.',
+    'Windows paths in user input (`C:\\Users\\me\\project`) are normalised before use.',
+  ]) {
+    assert.deepEqual(shadowableTokens(prose), [], `prose must not be flagged: ${prose}`);
+  }
   assert.deepEqual(
     shadowableTokens('Read `<absolute-plugin-root>\\skills\\deep-goal\\SKILL.md`'), [],
     'an anchored backslash path must be accepted, not flagged as unanchored');
