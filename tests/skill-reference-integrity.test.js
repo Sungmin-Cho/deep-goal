@@ -93,12 +93,28 @@ const PLUGIN_DOCS = (() => {
 // by scripts/lib/release-validator.js and tests/skill-runtime-contract.test.js.
 // A shell-expanded spelling is not an alternative here, it is a defect: see the
 // single-anchor-spelling test at the bottom.
+// SEPARATORS. Windows is a supported host — v1.2.0 exists to run there without
+// Git Bash — so `scripts\deep-goal-runtime.js` names the same file as
+// `scripts/deep-goal-runtime.js`. A matcher that knows only `/` lets the whole
+// deny-by-default invariant be bypassed with one character, which is exactly
+// what review found: the slash form produced five failures and the backslash
+// form produced none.
+//
+// Every matcher below therefore accepts either separator, and every extracted
+// token is normalised before it is resolved or compared. Runs of separators
+// collapse together, so an escaped `scripts\\x.js` in a string literal
+// normalises to the same path. Over-normalising is the safe direction here:
+// a token only matters once it resolves to a real file in the plugin, and prose
+// containing a stray backslash resolves to nothing.
+const SEP = String.raw`[\\/]`;
+const normalizePath = (token) => token.replace(/[\\/]+/g, '/');
+
 const PLUGIN_DIRS = 'skills|scripts|tests|docs|references|recipes|hooks|agents';
 const ANCHOR = String.raw`<absolute-plugin-root>`;
 const ANCHORED_TOKEN = new RegExp(`^(?:${ANCHOR})/`);
-const PATH_BODY = String.raw`[A-Za-z0-9._/${'{}'}|$<>-]+`;
-const REL = String.raw`\.{1,2}/`;
-const ANY_ROOT = String.raw`(?:(?:${ANCHOR})/|${REL}|(?:${PLUGIN_DIRS})/)`;
+const PATH_BODY = String.raw`[A-Za-z0-9._/\\${'{}'}|$<>-]+`;
+const REL = String.raw`\.{1,2}${SEP}`;
+const ANY_ROOT = String.raw`(?:(?:${ANCHOR})${SEP}|${REL}|(?:${PLUGIN_DIRS})${SEP})`;
 
 // Each pattern captures the path token in group 1, so anchoring and containment
 // are judged per token rather than per line — a line mixing an anchored and a
@@ -114,7 +130,7 @@ const FORMS = [
   // 4. executable path token anywhere
   //    The trailing boundary matters: without it `.js` matches the prefix of
   //    `hooks.json` and the guard reports a file that does not exist.
-  ['executable-token', new RegExp(String.raw`(?<![A-Za-z0-9._/{}<>$-])((?:${ANCHOR})/|${REL}|(?:${PLUGIN_DIRS})/)([A-Za-z0-9._/-]*\.(?:js|sh|mjs|cjs)(?![A-Za-z0-9]))`, 'g')],
+  ['executable-token', new RegExp(String.raw`(?<![A-Za-z0-9._/\\{}<>$-])((?:${ANCHOR})${SEP}|${REL}|(?:${PLUGIN_DIRS})${SEP})([A-Za-z0-9._/\\-]*\.(?:js|sh|mjs|cjs)(?![A-Za-z0-9]))`, 'g')],
 ];
 
 // DENY BY DEFAULT.
@@ -185,13 +201,13 @@ const ROOT_METADATA = new Set(['package.json', 'plugin.json', 'AGENTS.md', 'CLAU
   'SECURITY.md', 'LICENSE', 'SKILL.md']);
 
 // Path-shaped tokens: multi-segment paths, plus dotted single segments.
-const PATH_TOKEN = /[A-Za-z0-9_.@${}<>-]+(?:\/[A-Za-z0-9_.@{}|*-]+)+|[A-Za-z0-9_-]+\.[A-Za-z0-9]{1,6}\b/g;
+const PATH_TOKEN = /[A-Za-z0-9_.@${}<>-]+(?:[\\/][A-Za-z0-9_.@{}|*-]+)+|[A-Za-z0-9_-]+\.[A-Za-z0-9]{1,6}\b/g;
 
 function resolvesInPlugin(token, sourceFile) {
-  const clean = token.replace(/^\.\//, '');
+  const clean = normalizePath(token).replace(/^\.\//, '');
   if (PLUGIN_FILES.has(clean)) return true;
   try {
-    const fromSource = relative(ROOT, resolve(dirname(sourceFile), token));
+    const fromSource = relative(ROOT, resolve(dirname(sourceFile), normalizePath(token)));
     if (PLUGIN_FILES.has(fromSource)) return true;
   } catch { /* unresolvable token — prose */ }
   return false;
@@ -210,10 +226,13 @@ function* scopedTokens(line) {
     let token = m[0];
     if (token.startsWith('<') && !token.startsWith(ANCHOR)) token = token.slice(1);
     if (token.endsWith('>') && !token.includes(ANCHOR)) token = token.slice(0, -1);
+    // Normalise once, here, so every consumer of scopedTokens — the classifier
+    // and the malicious-workspace fixture alike — judges the same string.
+    token = normalizePath(token);
     if (!token.includes('/') && ROOT_METADATA.has(token)) continue;
     const before = line.slice(Math.max(0, m.index - 30), m.index);
-    // Already inside an anchored path.
-    if (/<absolute-plugin-root>["'\s]*\/?$/.test(before)) continue;
+    // Already inside an anchored path, written with either separator.
+    if (/<absolute-plugin-root>["'\s]*[\\/]?$/.test(before)) continue;
     // Markdown link target `](x.md)` — rendered navigation between documents,
     // not an instruction handed to a file tool. Markdown does not interpolate,
     // so these must stay source-relative; the link-destination test below pins
@@ -227,10 +246,14 @@ function denyByDefaultHits(line, sourceFile, root = ROOT) {
   const out = [];
   for (const token of scopedTokens(line)) {
     if (ANCHORED_TOKEN.test(token)) {
-      // Clause B still applies to anchored tokens that no FORM matched, and so
-      // does the symlink form of it — a lexically-contained path whose
-      // component is a symlink out of the root is exactly the file an attacker
-      // wants accepted, and checking it only on the FORMS path left a gap.
+      // Clause B is enforced here, not deferred. The reference implementation
+      // waves anchored tokens through with a "clause B checks these" comment,
+      // which is not true of this path — so both the lexical check and its
+      // symlink form run right here, because a contained-looking path whose
+      // component links out of the root is exactly the file an attacker wants
+      // accepted. `every referenced plugin path resolves inside the root` is a
+      // second, independent backstop: it resolves each anchored path for real
+      // and rejects one landing outside with `resolves outside the plugin root`.
       if (escapesRoot(token)) out.push({ form: 'resolves-in-plugin', token, why: 'escapes plugin root' });
       else if (escapesViaSymlink(token, root)) out.push({ form: 'resolves-in-plugin', token, why: 'escapes via symlink' });
       continue;
@@ -300,7 +323,7 @@ const ROOT_SENTINEL = sep === '/' ? '/plugin-root' : 'C:\\plugin-root';
 // the result to stay inside it. Tokens carrying template placeholders cannot be
 // resolved literally, so they are checked lexically for `..` instead.
 function escapesRoot(token) {
-  const body = token.replace(new RegExp(`^(?:${ANCHOR})/`), '');
+  const body = normalizePath(token).replace(new RegExp(`^(?:${ANCHOR})/`), '');
   if (/[{}|$]/.test(body)) return body.split('/').includes('..');
   const resolved = resolve(ROOT_SENTINEL, body);
   return resolved !== ROOT_SENTINEL && !resolved.startsWith(ROOT_SENTINEL + sep);
@@ -316,7 +339,7 @@ function escapesRoot(token) {
 // and made the suite fail 5 runs in 20. A flaky security guard is worse than a
 // missing one: it teaches people to re-run until green.
 function escapesViaSymlink(token, root = ROOT) {
-  const body = token.replace(new RegExp(`^(?:${ANCHOR})/`), '');
+  const body = normalizePath(token).replace(new RegExp(`^(?:${ANCHOR})/`), '');
   if (/[{}|$]/.test(body)) return false;
   const target = join(root, body);
   if (!existsSync(target)) return false;
@@ -332,7 +355,7 @@ function shadowableTokens(line, sourceFile = join(ROOT, 'AGENTS.md'), root = ROO
     re.lastIndex = 0;
     let m;
     while ((m = re.exec(line))) {
-      const token = m[2] === undefined ? m[1] : m[1] + m[2];
+      const token = normalizePath(m[2] === undefined ? m[1] : m[1] + m[2]);
       if (!ANCHORED_TOKEN.test(token)) out.push({ form, token, why: 'unanchored' });
       else if (escapesRoot(token)) out.push({ form, token, why: 'escapes plugin root' });
       else if (escapesViaSymlink(token, root)) out.push({ form, token, why: 'escapes via symlink' });
@@ -594,6 +617,78 @@ test('no undeclared path under a non-shipped directory is named', () => {
   assert.deepEqual(undeclared, [],
     'a path under a gitignored, never-shipped directory can only resolve against '
     + `the analysed project — declare it in NON_SHIPPED or drop it:\n  ${undeclared.join('\n  ')}`);
+});
+
+test('a backslash separator does not hide a path from the guard', () => {
+  // Review found the slash form producing five failures and the backslash form
+  // producing none — the same unanchored reference to the same file, invisible
+  // because the matchers knew only `/`. Windows is a supported host, so that is
+  // a legitimate spelling and not a typo, and one character bypassed the whole
+  // deny-by-default invariant.
+  //
+  // Each pair is [slash, backslash]; both sides must be flagged, and the pair
+  // is asserted together so a future edit cannot fix one and drop the other.
+  const pairs = [
+    ['Run `node scripts/deep-goal-runtime.js` to start.',
+     'Run `node scripts\\deep-goal-runtime.js` to start.'],
+    ['Read `skills/deep-goal/SKILL.md` first.',
+     'Read `skills\\deep-goal\\SKILL.md` first.'],
+    ['the CLI lives at `scripts/lib/proof-gate.js`',
+     'the CLI lives at `scripts\\lib\\proof-gate.js`'],
+  ];
+  for (const [slash, backslash] of pairs) {
+    assert.ok(shadowableTokens(slash).length > 0, `slash form must be flagged: ${slash}`);
+    assert.ok(shadowableTokens(backslash).length > 0, `backslash form must be flagged: ${backslash}`);
+  }
+
+  // Escape parity: a doubled backslash is how the same path appears inside a
+  // string literal, and separator runs collapse, so it resolves identically.
+  assert.ok(shadowableTokens('const p = "scripts\\\\lib\\\\proof-gate.js";').length > 0,
+    'an escaped backslash path must be flagged too');
+
+  // The pairs above are all caught by a FORM as well, so they do not prove the
+  // deny-by-default path is separator-aware. This one does, and only this one:
+  // no read verb, so no FORM matches, and a basename that ROOT_METADATA exempts
+  // on its own — so if the token is not extracted whole, nothing sees it at all.
+  // With a slash-only token pattern this line scores zero failures.
+  assert.ok(
+    shadowableTokens('워크플로우 정본은 `skills\\deep-goal\\SKILL.md` 이다.').length > 0,
+    'deny-by-default must extract a backslash path whole, not just its basename');
+
+  // And the mirror of that: a case only a FORM can see. Deny-by-default asks
+  // whether a token resolves inside the plugin, so a path to a file that does
+  // not exist yet is invisible to it — that is the gap FORMS still cover. This
+  // one needs the separator inside the path *body*, not just after the root.
+  assert.ok(shadowableTokens('Read `skills\\zzz\\missing.md` before starting.').length > 0,
+    'a FORM must match a backslash path body, even when nothing resolves');
+
+  // Normalisation is not a licence to flag prose: a token still only counts
+  // once it resolves to a real file in the plugin.
+  assert.deepEqual(shadowableTokens('escape a quote with \\" and a backslash with \\\\'), [],
+    'prose containing backslashes must not be flagged');
+  assert.deepEqual(
+    shadowableTokens('Read `<absolute-plugin-root>\\skills\\deep-goal\\SKILL.md`'), [],
+    'an anchored backslash path must be accepted, not flagged as unanchored');
+});
+
+test('the anchor cannot be spelled as a shell variable anywhere', () => {
+  // The other reported bypass, closed here by a different mechanism than the
+  // reference implementation uses. Elsewhere it is a `non-expanding-anchor`
+  // check hung off a list of commands, which misses `cp`, `mv`, `install` and
+  // any wrapper — enumeration creeping back in on a second axis. This plugin
+  // instead bans the shell spelling outright in every scanned file, because
+  // Codex sets no such variable and the placeholder is substituted by the agent
+  // rather than by a shell, so quoting cannot change the outcome either way.
+  const line = "cp '${CLAUDE_PLUGIN_ROOT}/scripts/deep-goal-runtime.js' /tmp/x";
+  const offenders = [];
+  for (const spelling of [/\$\{CLAUDE_PLUGIN_ROOT\}/, /<PLUGIN_ROOT>/, /\$CLAUDE_PLUGIN_ROOT\b/]) {
+    if (spelling.test(line)) offenders.push(spelling.source);
+  }
+  assert.ok(offenders.length > 0,
+    'the single-anchor-spelling rule must reject the shell spelling regardless of the command');
+  // And it is verb-agnostic: no command appears in this line at all.
+  assert.ok(shadowableTokens('scripts/deep-goal-runtime.js 를 참조한다').length > 0,
+    'deny-by-default must flag a bare plugin path with no command verb present');
 });
 
 test('an anchored path that leaves the root through a symlink is rejected', () => {
