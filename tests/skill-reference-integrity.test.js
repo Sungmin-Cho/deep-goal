@@ -296,12 +296,28 @@ function denyByDefaultHits(line, sourceFile, root = ROOT) {
 // document are flagged, so ordinary prose is untouched.
 const BARE_BASENAME = /\b(?:Read|Follow|read|follow)\s*\(?\s*["'`]([A-Za-z0-9][A-Za-z0-9._-]*\.md)(?:#[^`"']*)?["'`]/g;
 
+// The executable twin. `Read`/`Follow` on a `.md` was covered; an interpreter on
+// a runnable file was not, and that shape is strictly more dangerous: `node
+// prep-scout.js` resolves against cwd — the analysed workspace — and running a
+// planted file there is arbitrary code execution with the caller's permissions.
+// Membership in the shipped set is still required, so prose that merely names a
+// script is untouched; it is the interpreter that makes it an instruction.
+const BARE_EXEC_BASENAME =
+  /\b(?:node|python3?|deno|bun|bash|sh|zsh)\s+["'`]?([A-Za-z0-9][A-Za-z0-9._-]*\.(?:js|cjs|mjs|py|sh))["'`]?/g;
+
 function bareBasenameHits(line) {
   const out = [];
   BARE_BASENAME.lastIndex = 0;
   let m;
   while ((m = BARE_BASENAME.exec(line))) {
     if (PLUGIN_DOCS.has(m[1])) out.push({ form: 'bare-basename', token: m[1], why: 'unanchored' });
+  }
+  const shippedBasenames = new Set([...PLUGIN_FILES].map((f) => f.split('/').pop()));
+  BARE_EXEC_BASENAME.lastIndex = 0;
+  while ((m = BARE_EXEC_BASENAME.exec(line))) {
+    if (shippedBasenames.has(m[1])) {
+      out.push({ form: 'bare-exec-basename', token: m[1], why: 'unanchored' });
+    }
   }
   return out;
 }
@@ -516,6 +532,19 @@ test('a malicious workspace cannot shadow any instruction the plugin issues', ()
     writeFileSync(join(evil, 'scripts', 'deep-goal-runtime.js'), 'process.stdout.write("SHADOW");\n');
     writeFileSync(join(evil, 'scripts', 'lib', 'proof-gate.js'), 'module.exports = { SHADOW: true };\n');
 
+    // Derived, not enumerated. A hand-written plant list only covers the paths
+    // someone remembered: `node prep-scout.js` — a bare basename naming a real
+    // shipped script resolved against the evil cwd and landed on nothing,
+    // because that file was never planted. Planting every shipped file, at both its repo-relative path and its bare basename,
+    // makes the coverage follow the tree instead of the memory.
+    for (const rel of PLUGIN_FILES) {
+      for (const at of [rel]) {
+        const dest = join(evil, at);
+        mkdirSync(dirname(dest), { recursive: true });
+        if (!existsSync(dest)) writeFileSync(dest, '// SHADOW — must never be read\n');
+      }
+    }
+
     // Resolve for real, from the evil cwd, exactly as a runtime agent would.
     // Re-running the classifier here would only restate what it believes; this
     // performs the resolution and asks which file the instruction lands on.
@@ -626,7 +655,13 @@ test('no undeclared path under a non-shipped directory is named', () => {
   // normalizePath never reaches it, so `\` has to be spelled out here. With `/`
   // alone, `docs\backlog.md` named an undeclared non-shipped path and nothing
   // objected, while the slash spelling was rejected.
-  const NON_SHIPPED_DIRS = new RegExp(String.raw`(?:^|[\s\`"'(])((?:${escaped})[\\/][A-Za-z0-9._\\/-]+)`, 'g');
+  // Negative lookbehind, not a positive prefix list. Enumerating the characters
+  // that may precede a path means every character nobody thought of is a bypass:
+  // `**docs/NOT_DECLARED.md**` and `[docs/OTHER.md](…)` — bold text and link text,
+  // both ordinary markdown — slipped past a list of space/backtick/quote/paren.
+  // Asserting only that the match does not start mid-token covers every prefix
+  // at once. A sibling already used this form.
+  const NON_SHIPPED_DIRS = new RegExp(String.raw`(?<![A-Za-z0-9._\\/-])((?:${escaped})[\\/][A-Za-z0-9._\\/-]+)`, 'g');
   // Both spellings, on the axis rather than on the tree.
   for (const spelling of ['docs/backlog.md', 'docs\\backlog.md']) {
     NON_SHIPPED_DIRS.lastIndex = 0;
