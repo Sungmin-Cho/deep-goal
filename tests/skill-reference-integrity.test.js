@@ -223,7 +223,7 @@ function* scopedTokens(line) {
   }
 }
 
-function denyByDefaultHits(line, sourceFile) {
+function denyByDefaultHits(line, sourceFile, root = ROOT) {
   const out = [];
   for (const token of scopedTokens(line)) {
     if (ANCHORED_TOKEN.test(token)) {
@@ -232,7 +232,7 @@ function denyByDefaultHits(line, sourceFile) {
       // component is a symlink out of the root is exactly the file an attacker
       // wants accepted, and checking it only on the FORMS path left a gap.
       if (escapesRoot(token)) out.push({ form: 'resolves-in-plugin', token, why: 'escapes plugin root' });
-      else if (escapesViaSymlink(token)) out.push({ form: 'resolves-in-plugin', token, why: 'escapes via symlink' });
+      else if (escapesViaSymlink(token, root)) out.push({ form: 'resolves-in-plugin', token, why: 'escapes via symlink' });
       continue;
     }
     // Forward defence only: a non-shipped path never resolves in the plugin, so
@@ -308,18 +308,25 @@ function escapesRoot(token) {
 
 // Symlink escape: an anchored, lexically-contained path can still point out of
 // the root if a component is a symlink. Only checkable for targets that exist.
-function escapesViaSymlink(token) {
+//
+// `root` is a parameter rather than a closed-over constant so the fixture can
+// use a throwaway root outside the repository. An earlier version planted its
+// symlink *inside* the real root, which raced the repo-tree `cpSync` in
+// release-validator.test.js — `node --test` runs files in parallel processes —
+// and made the suite fail 5 runs in 20. A flaky security guard is worse than a
+// missing one: it teaches people to re-run until green.
+function escapesViaSymlink(token, root = ROOT) {
   const body = token.replace(new RegExp(`^(?:${ANCHOR})/`), '');
   if (/[{}|$]/.test(body)) return false;
-  const target = join(ROOT, body);
+  const target = join(root, body);
   if (!existsSync(target)) return false;
   const real = realpathSync(target);
-  const realRoot = realpathSync(ROOT);
+  const realRoot = realpathSync(root);
   return real !== realRoot && !real.startsWith(realRoot + sep);
 }
 
 // Returns violations on a line: {form, token, why}. Empty when the line is clean.
-function shadowableTokens(line, sourceFile = join(ROOT, 'AGENTS.md')) {
+function shadowableTokens(line, sourceFile = join(ROOT, 'AGENTS.md'), root = ROOT) {
   const out = [];
   for (const [form, re] of FORMS) {
     re.lastIndex = 0;
@@ -328,12 +335,12 @@ function shadowableTokens(line, sourceFile = join(ROOT, 'AGENTS.md')) {
       const token = m[2] === undefined ? m[1] : m[1] + m[2];
       if (!ANCHORED_TOKEN.test(token)) out.push({ form, token, why: 'unanchored' });
       else if (escapesRoot(token)) out.push({ form, token, why: 'escapes plugin root' });
-      else if (escapesViaSymlink(token)) out.push({ form, token, why: 'escapes via symlink' });
+      else if (escapesViaSymlink(token, root)) out.push({ form, token, why: 'escapes via symlink' });
     }
   }
   out.push(...bareBasenameHits(line));
   out.push(...jsModuleLoadHits(line));
-  out.push(...denyByDefaultHits(line, sourceFile));
+  out.push(...denyByDefaultHits(line, sourceFile, root));
   // A token can match several FORMS plus deny-by-default; report each once.
   const seen = new Set();
   return out.filter((v) => {
@@ -595,12 +602,13 @@ test('an anchored path that leaves the root through a symlink is rejected', () =
   // path.resolve is lexical, so an anchored, `..`-free path whose component is
   // a symlink passes every other check and still lands outside the plugin.
   const outside = mkdtempSync(join(tmpdir(), 'dg-symlink-outside-'));
-  const fixtureDir = join(ROOT, '.tmp-symlink-fixture');
+  const fakeRoot = mkdtempSync(join(tmpdir(), 'dg-symlink-root-'));
   try {
     writeFileSync(join(outside, 'evil.md'), '# SHADOW — outside the plugin root\n');
-    mkdirSync(fixtureDir, { recursive: true });
-    symlinkSync(join(outside, 'evil.md'), join(fixtureDir, 'evil.md'));
-    const token = '<absolute-plugin-root>/.tmp-symlink-fixture/evil.md';
+    mkdirSync(join(fakeRoot, 'skills'), { recursive: true });
+    symlinkSync(join(outside, 'evil.md'), join(fakeRoot, 'skills', 'evil.md'));
+    writeFileSync(join(fakeRoot, 'skills', 'ok.md'), '# in-root\n');
+    const token = '<absolute-plugin-root>/skills/evil.md';
 
     // Non-vacuity: the token is anchored and lexically contained, so every
     // other clause accepts it. Only the symlink check can reject it.
@@ -608,20 +616,20 @@ test('an anchored path that leaves the root through a symlink is rejected', () =
     assert.equal(escapesRoot(token), false, 'fixture token must be lexically contained');
 
     // Both production sites: the FORMS path and the deny-by-default path.
-    const viaForm = shadowableTokens(`Read \`${token}\``);
+    const viaForm = shadowableTokens(`Read \`${token}\``, undefined, fakeRoot);
     assert.ok(viaForm.some((v) => v.why === 'escapes via symlink'),
       `read-verb path must reject the symlink: ${JSON.stringify(viaForm)}`);
-    const viaDeny = denyByDefaultHits(`증명은 \`${token}\` 를 따른다`, join(ROOT, 'AGENTS.md'));
+    const viaDeny = denyByDefaultHits(`증명은 \`${token}\` 를 따른다`, join(ROOT, 'AGENTS.md'), fakeRoot);
     assert.ok(viaDeny.some((v) => v.why === 'escapes via symlink'),
       `deny-by-default path must reject the symlink: ${JSON.stringify(viaDeny)}`);
 
-    // An in-root target of the same shape is still accepted, so the rule is
-    // about where the link points and not about the fixture directory.
-    writeFileSync(join(fixtureDir, 'ok.md'), '# in-root\n');
-    assert.deepEqual(shadowableTokens('Read `<absolute-plugin-root>/.tmp-symlink-fixture/ok.md`'), [],
+    // A real in-root target of the same shape is still accepted, so the rule is
+    // about where the link points and not about the directory it sits in.
+    assert.deepEqual(
+      shadowableTokens('Read `<absolute-plugin-root>/skills/ok.md`', undefined, fakeRoot), [],
       'a real in-root file must still be accepted');
   } finally {
-    rmSync(fixtureDir, { recursive: true, force: true });
+    rmSync(fakeRoot, { recursive: true, force: true });
     rmSync(outside, { recursive: true, force: true });
   }
 });
