@@ -125,6 +125,11 @@ const FORMS = [
 // token resolve to a real file in the plugin?". Anything that does must be
 // anchored, whatever the verb, extension or sentence around it. Anything that
 // does not resolve is prose about the target project and passes.
+// `docs` is skipped deliberately and the reason is subtle: it is gitignored, so
+// it exists in a maintainer checkout and not in CI. Letting it into this set
+// would make the deny-by-default verdict depend on which machine ran the test.
+// The consequence — that a `docs/…` path can never resolve in the plugin, and
+// so is invisible to this rule — is handled by NON_SHIPPED below, not by luck.
 const PLUGIN_FILES = (() => {
   const rel = new Set();
   const skip = new Set(['node_modules', '.git', '.github', '.deep-review', 'docs', 'tests']);
@@ -139,6 +144,21 @@ const PLUGIN_FILES = (() => {
   walk(ROOT);
   return rel;
 })();
+
+// NON-SHIPPED PATHS.
+//
+// A path under a directory the plugin never ships is the *worst* case of the
+// shadow class, not an exempt one: it cannot resolve inside an installed plugin
+// at all, so the only place it can ever resolve is the analysed project. It is
+// also the case deny-by-default structurally cannot see, because that rule asks
+// "does this resolve in the plugin?" and the answer is permanently no.
+//
+// So each such path is listed here with the sentence that makes it safe to
+// read, and a test below asserts the document actually carries that sentence.
+// The exemption is a claim the suite checks, not a hole.
+const NON_SHIPPED = new Map([
+  ['docs/DOCS_RULE.md', /gitignored and\s*\n?>?\s*ships with nothing|ships with nothing/],
+]);
 
 // Single-segment root metadata named descriptively — prep-scout tells the agent
 // to look for `CLAUDE.md` / `AGENTS.md` / `package.json` *in the target
@@ -191,10 +211,15 @@ function denyByDefaultHits(line, sourceFile) {
   const out = [];
   for (const token of scopedTokens(line)) {
     if (ANCHORED_TOKEN.test(token)) {
-      // Clause B still applies to anchored tokens that no FORM matched.
+      // Clause B still applies to anchored tokens that no FORM matched, and so
+      // does the symlink form of it — a lexically-contained path whose
+      // component is a symlink out of the root is exactly the file an attacker
+      // wants accepted, and checking it only on the FORMS path left a gap.
       if (escapesRoot(token)) out.push({ form: 'resolves-in-plugin', token, why: 'escapes plugin root' });
+      else if (escapesViaSymlink(token)) out.push({ form: 'resolves-in-plugin', token, why: 'escapes via symlink' });
       continue;
     }
+    if (NON_SHIPPED.has(token)) continue;              // asserted by its own test
     if (resolvesInPlugin(token, sourceFile)) {
       out.push({ form: 'resolves-in-plugin', token, why: 'unanchored' });
     }
@@ -218,7 +243,10 @@ function bareBasenameHits(line) {
   return out;
 }
 
-// JS module load. Unlike deep-work there is no safe textual form here, because
+// JS module load — refused outright, in every spelling.
+//
+// The rule this enforces is "an instruction document does not embed a JS module
+// load of a plugin file", not "anchor it properly". Unlike deep-work there is no safe textual form here, because
 // `<absolute-plugin-root>` is a placeholder an *agent* substitutes while
 // reading prose — no JS runtime expands it. `require("<absolute-plugin-root>/x")`
 // is a bare package specifier, so Node searches the *workspace* node_modules
@@ -468,6 +496,52 @@ test('markdown link destinations are never the plugin-root placeholder', () => {
   assert.deepEqual(broken, [],
     'markdown link destination uses a placeholder that nothing expands — use a '
     + `source-relative path instead:\n  ${broken.join('\n  ')}`);
+});
+
+test('a path the plugin never ships carries the sentence that makes it safe', () => {
+  // Self-consistency axis. This PR's own rule — "a bare plugin path resolves
+  // against the analysed project" — was being violated by the line stating
+  // where the doc rules live, because `docs/` is gitignored and so that path
+  // can resolve *nowhere else*. Deny-by-default could not see it: it only
+  // flags what resolves inside the plugin. Writing a rule is not enforcing it,
+  // so the exemption is asserted rather than assumed.
+  const violations = [];
+  for (const [token, required] of NON_SHIPPED) {
+    assert.ok(!PLUGIN_FILES.has(token),
+      `${token} is listed as non-shipped but is in the shipped file set`);
+    for (const file of markdownFiles()) {
+      const body = readFileSync(file, 'utf8');
+      if (!body.includes(token)) continue;
+      if (!required.test(body)) {
+        violations.push(`${relative(ROOT, file)} names ${token} without saying it is not shipped`);
+      }
+    }
+  }
+  assert.deepEqual(violations, [],
+    `a non-shipped path is named without the caveat that makes it safe to read:\n  ${violations.join('\n  ')}`);
+});
+
+test('no undeclared path under a non-shipped directory is named', () => {
+  // The generalisation of the rule above. `docs/` and `.deep-review/` are
+  // gitignored, so any path under them is unresolvable in an installed plugin
+  // and therefore resolves only against the workspace. Each one must be
+  // declared in NON_SHIPPED, which forces the caveat test to cover it.
+  const NON_SHIPPED_DIRS = /(?:^|[\s`"'(])((?:docs|\.deep-review)\/[A-Za-z0-9._/-]+)/g;
+  const undeclared = [];
+  for (const file of markdownFiles()) {
+    readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
+      NON_SHIPPED_DIRS.lastIndex = 0;
+      let m;
+      while ((m = NON_SHIPPED_DIRS.exec(line))) {
+        if (!NON_SHIPPED.has(m[1])) {
+          undeclared.push(`${relative(ROOT, file)}:${i + 1}  ${m[1]}`);
+        }
+      }
+    });
+  }
+  assert.deepEqual(undeclared, [],
+    'a path under a gitignored, never-shipped directory can only resolve against '
+    + `the analysed project — declare it in NON_SHIPPED or drop it:\n  ${undeclared.join('\n  ')}`);
 });
 
 test('the plugin uses exactly one anchor spelling', () => {

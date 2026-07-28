@@ -108,7 +108,7 @@ Codex는 자체 판단으로 종료하므로 표면화 제약이 덜하지만, �
 ### Codex 컴파일 예시 (레시피 기반)
 
 ```
-[달성] deep-work 세션으로 <기능>을 Research→Spec→Plan→Implement→Test 순으로 완수한다.
+[달성] deep-work 세션으로 <기능>을 Research→(risk class medium 이상이면 Spec)→Plan→Implement→Test 순으로 완수한다.
 [변경 금지] main 브랜치 직접 push 금지, 기존 API 시그니처 유지.
 [검증] `npm test` 전체 통과 AND deep-review-loop APPROVE.
 [종료] 검증 통과 시 완료.

@@ -8,7 +8,10 @@ Codex does not support them.
 Release history lives in `CHANGELOG.md` / `CHANGELOG.ko.md`; README owns what the plugin is and how
 to use it. Read the current version, never hardcode it: `npm pkg get version`.
 
-> 📄 Documentation in this repo follows `docs/DOCS_RULE.md` (local maintainer guide).
+> 📄 Doc maintenance follows `docs/DOCS_RULE.md` — a maintainer rulebook that is gitignored and
+> ships with nothing. It exists only in a maintainer's own checkout; never try to open it at
+> runtime, because the only place that path can resolve in an installed plugin is the project
+> being analysed.
 
 ## The user activates, the plugin only compiles
 
@@ -66,10 +69,9 @@ generic CI uses the pinned Node contract test instead.
    metadata test pins the version literal too, so sweep for it before tagging.
 2. **Bilingual CHANGELOG** — matching Keep a Changelog sections in `CHANGELOG.md` and
    `CHANGELOG.ko.md`. Release notes live there and nowhere else.
-3. **Suite re-pin**, after the merge lands on `main`:
+3. **Suite re-pin**, after the merge lands on `main`. From the deep-suite checkout:
 
    ```text
-   cd /Users/sungmin/Dev/claude-plugins/deep-suite
    npm run release:bump -- deep-goal <sha40>
    npm run preflight
    ```
