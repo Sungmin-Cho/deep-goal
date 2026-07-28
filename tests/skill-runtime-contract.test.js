@@ -69,17 +69,25 @@ function assertFailClosedDegrade(text) {
   assert.match(text, /ready-to-run[^\n]*(?:금지|않|아님|not)/i);
 }
 
-function referencedMarkdownPaths(text) {
-  return [...text.matchAll(
-    /(?<![A-Za-z0-9_.-])((?:\.\.\/deep-goal-workflow\/)?references\/[A-Za-z0-9_./-]+\.md)/g,
-  )].map((match) => match[1]);
-}
+// Reference paths are anchored at <absolute-plugin-root>, so they resolve from
+// the repository root the way an agent resolves them — not from the naming
+// skill's directory. A bare relative form is still recognised and still
+// resolved skill-relative, so the check keeps working either way; the `/` in
+// the lookbehind is what stops the relative pattern from re-matching the tail
+// of an anchored path and resolving it against the wrong base.
+const ANCHORED_REFERENCE = /<absolute-plugin-root>\/([A-Za-z0-9_./-]+\/references\/[A-Za-z0-9_./-]+\.md)/g;
+const RELATIVE_REFERENCE = /(?<![A-Za-z0-9_./-])((?:\.\.\/deep-goal-workflow\/)?references\/[A-Za-z0-9_./-]+\.md)/g;
 
 function assertRelativeReferencesExist(relativeSkillPath, text) {
-  const references = referencedMarkdownPaths(text);
-  assert.ok(references.length > 0, `${relativeSkillPath} must name relative references`);
-  for (const reference of new Set(references)) {
-    const target = resolve(REPOSITORY_ROOT, dirname(relativeSkillPath), reference);
+  const targets = new Map();
+  for (const match of text.matchAll(ANCHORED_REFERENCE)) {
+    targets.set(`<absolute-plugin-root>/${match[1]}`, resolve(REPOSITORY_ROOT, match[1]));
+  }
+  for (const match of text.matchAll(RELATIVE_REFERENCE)) {
+    targets.set(match[1], resolve(REPOSITORY_ROOT, dirname(relativeSkillPath), match[1]));
+  }
+  assert.ok(targets.size > 0, `${relativeSkillPath} must name its workflow references`);
+  for (const [reference, target] of targets) {
     assert.equal(existsSync(target), true, `${relativeSkillPath}: missing ${reference}`);
   }
 }
