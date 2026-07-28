@@ -12,7 +12,7 @@
 // failed. An odd fence count is the machine-detectable signature of that class.
 
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { test } from 'node:test';
@@ -153,12 +153,28 @@ const PLUGIN_FILES = (() => {
 // also the case deny-by-default structurally cannot see, because that rule asks
 // "does this resolve in the plugin?" and the answer is permanently no.
 //
-// So each such path is listed here with the sentence that makes it safe to
-// read, and a test below asserts the document actually carries that sentence.
-// The exemption is a claim the suite checks, not a hole.
+// So each such path is listed here with the clauses that make it safe to read,
+// and a test below asserts the document carries all of them.
+//
+// Pin the PROHIBITION, not the provenance. The first version of this matched
+// "ships with nothing" alone, which is a fact about the file rather than an
+// instruction about it: review trimmed the caveat down to "`docs/DOCS_RULE.md`,
+// which ships with nothing.", deleting the whole protective clause, and all
+// thirteen tests still passed. What keeps the path safe is the sentence telling
+// a reader not to open it and why — so that is what is required here.
 const NON_SHIPPED = new Map([
-  ['docs/DOCS_RULE.md', /gitignored and\s*\n?>?\s*ships with nothing|ships with nothing/],
+  ['docs/DOCS_RULE.md', [
+    /ships with nothing/,
+    /never try to open it at runtime/,
+    /only place that path can resolve in an installed plugin is the project being analysed/,
+  ]],
 ]);
+
+// Blockquote markers and hard wraps must not decide whether a caveat counts, so
+// the required clauses are matched against a flattened body.
+function flatten(body) {
+  return body.replace(/^[ \t]*>[ \t]?/gm, '').replace(/\s+/g, ' ');
+}
 
 // Single-segment root metadata named descriptively — prep-scout tells the agent
 // to look for `CLAUDE.md` / `AGENTS.md` / `package.json` *in the target
@@ -219,7 +235,11 @@ function denyByDefaultHits(line, sourceFile) {
       else if (escapesViaSymlink(token)) out.push({ form: 'resolves-in-plugin', token, why: 'escapes via symlink' });
       continue;
     }
-    if (NON_SHIPPED.has(token)) continue;              // asserted by its own test
+    // Forward defence only: a non-shipped path never resolves in the plugin, so
+    // this line is unreachable today. All of the actual protection is in the two
+    // NON_SHIPPED tests below. It is kept so that adding such a path to the
+    // shipped set later fails the caveat test rather than this rule silently.
+    if (NON_SHIPPED.has(token)) continue;
     if (resolvesInPlugin(token, sourceFile)) {
       out.push({ form: 'resolves-in-plugin', token, why: 'unanchored' });
     }
@@ -506,27 +526,52 @@ test('a path the plugin never ships carries the sentence that makes it safe', ()
   // flags what resolves inside the plugin. Writing a rule is not enforcing it,
   // so the exemption is asserted rather than assumed.
   const violations = [];
-  for (const [token, required] of NON_SHIPPED) {
+  for (const [token, clauses] of NON_SHIPPED) {
     assert.ok(!PLUGIN_FILES.has(token),
       `${token} is listed as non-shipped but is in the shipped file set`);
     for (const file of markdownFiles()) {
       const body = readFileSync(file, 'utf8');
       if (!body.includes(token)) continue;
-      if (!required.test(body)) {
-        violations.push(`${relative(ROOT, file)} names ${token} without saying it is not shipped`);
+      const flat = flatten(body);
+      for (const clause of clauses) {
+        if (!clause.test(flat)) {
+          violations.push(`${relative(ROOT, file)} names ${token} but is missing: ${clause.source}`);
+        }
       }
     }
   }
   assert.deepEqual(violations, [],
-    `a non-shipped path is named without the caveat that makes it safe to read:\n  ${violations.join('\n  ')}`);
+    `a non-shipped path is named without every clause that makes it safe to read:\n  ${violations.join('\n  ')}`);
+});
+
+// Derived from `.gitignore`, not hand-listed. A hand-listed pair matched the
+// ignore file exactly on the day it was written and would have leaked silently
+// the first time a third entry was added.
+const GITIGNORED_DIRS = (() => {
+  const body = readFileSync(join(ROOT, '.gitignore'), 'utf8');
+  return body.split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#') && !line.startsWith('!') && line.endsWith('/'))
+    .map((line) => line.replace(/\/$/, ''));
+})();
+
+test('the non-shipped directory list is derived from .gitignore, not guessed', () => {
+  // Non-vacuity: the sweep below is only meaningful if this actually found the
+  // directories that motivated it.
+  assert.ok(GITIGNORED_DIRS.length > 0, '.gitignore yielded no ignored directories');
+  for (const dir of ['docs', '.deep-review']) {
+    assert.ok(GITIGNORED_DIRS.includes(dir),
+      `${dir} must be recognised as non-shipped — it is where the blind spot was found`);
+  }
 });
 
 test('no undeclared path under a non-shipped directory is named', () => {
-  // The generalisation of the rule above. `docs/` and `.deep-review/` are
-  // gitignored, so any path under them is unresolvable in an installed plugin
-  // and therefore resolves only against the workspace. Each one must be
-  // declared in NON_SHIPPED, which forces the caveat test to cover it.
-  const NON_SHIPPED_DIRS = /(?:^|[\s`"'(])((?:docs|\.deep-review)\/[A-Za-z0-9._/-]+)/g;
+  // The generalisation of the caveat rule. Anything under a gitignored
+  // directory is unresolvable in an installed plugin and therefore resolves
+  // only against the workspace. Each one must be declared in NON_SHIPPED, which
+  // forces the caveat test to cover it.
+  const escaped = GITIGNORED_DIRS.map((d) => d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const NON_SHIPPED_DIRS = new RegExp(String.raw`(?:^|[\s\`"'(])((?:${escaped})\/[A-Za-z0-9._/-]+)`, 'g');
   const undeclared = [];
   for (const file of markdownFiles()) {
     readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
@@ -542,6 +587,43 @@ test('no undeclared path under a non-shipped directory is named', () => {
   assert.deepEqual(undeclared, [],
     'a path under a gitignored, never-shipped directory can only resolve against '
     + `the analysed project — declare it in NON_SHIPPED or drop it:\n  ${undeclared.join('\n  ')}`);
+});
+
+test('an anchored path that leaves the root through a symlink is rejected', () => {
+  // `escapes via symlink` is produced on two code paths and, until this test,
+  // asserted on neither: containment only ever exercised the lexical `..` form.
+  // path.resolve is lexical, so an anchored, `..`-free path whose component is
+  // a symlink passes every other check and still lands outside the plugin.
+  const outside = mkdtempSync(join(tmpdir(), 'dg-symlink-outside-'));
+  const fixtureDir = join(ROOT, '.tmp-symlink-fixture');
+  try {
+    writeFileSync(join(outside, 'evil.md'), '# SHADOW — outside the plugin root\n');
+    mkdirSync(fixtureDir, { recursive: true });
+    symlinkSync(join(outside, 'evil.md'), join(fixtureDir, 'evil.md'));
+    const token = '<absolute-plugin-root>/.tmp-symlink-fixture/evil.md';
+
+    // Non-vacuity: the token is anchored and lexically contained, so every
+    // other clause accepts it. Only the symlink check can reject it.
+    assert.ok(ANCHORED_TOKEN.test(token), 'fixture token must be anchored');
+    assert.equal(escapesRoot(token), false, 'fixture token must be lexically contained');
+
+    // Both production sites: the FORMS path and the deny-by-default path.
+    const viaForm = shadowableTokens(`Read \`${token}\``);
+    assert.ok(viaForm.some((v) => v.why === 'escapes via symlink'),
+      `read-verb path must reject the symlink: ${JSON.stringify(viaForm)}`);
+    const viaDeny = denyByDefaultHits(`증명은 \`${token}\` 를 따른다`, join(ROOT, 'AGENTS.md'));
+    assert.ok(viaDeny.some((v) => v.why === 'escapes via symlink'),
+      `deny-by-default path must reject the symlink: ${JSON.stringify(viaDeny)}`);
+
+    // An in-root target of the same shape is still accepted, so the rule is
+    // about where the link points and not about the fixture directory.
+    writeFileSync(join(fixtureDir, 'ok.md'), '# in-root\n');
+    assert.deepEqual(shadowableTokens('Read `<absolute-plugin-root>/.tmp-symlink-fixture/ok.md`'), [],
+      'a real in-root file must still be accepted');
+  } finally {
+    rmSync(fixtureDir, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  }
 });
 
 test('the plugin uses exactly one anchor spelling', () => {

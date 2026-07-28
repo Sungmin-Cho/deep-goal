@@ -116,7 +116,7 @@ pause 지점: Research·Plan(진입 시 Spec) 문서 승인 요청, Exit Gate �
 
 goal은 *턴 간 프롬프트*를 없애줄 뿐, 사용자 입력을 기다리는 지점 자체를 없애지 않는다. 이 레시피에는 그런 지점이 최소 세 종류 있다 — **Research·Plan 문서 승인(Spec에 진입했다면 Spec 승인도)**, **phase 경계마다의 Exit Gate**, **deep-review-loop이 privacy·mutation 소유권·pre-staged·DEFER를 물을 때**. 이 점을 사용자에게 사전 고지한다.
 
-`deep-work-workflow/SKILL.md`는 "Plan 승인이 유일한 필수 인터랙션"이라고 적지만 그 문장은 orchestrator보다 오래됐다. orchestrator는 Research와 Spec 완료 후에도 같은 문서 승인 UX를 실행한다. 승인 지점을 Plan 하나로 가정한 조건은 나머지 두 곳에서 멈춘 채 상한만 소진한다.
+`deep-work-workflow/SKILL.md`는 "Plan 승인이 유일한 필수 인터랙션"이라고 적지만 그 문장은 orchestrator보다 오래됐다. orchestrator는 Research 완료 후에, 그리고 Spec에 진입한 세션이면 Spec 완료 후에도 같은 문서 승인 UX를 실행한다. 승인 지점을 Plan 하나로 가정한 조건은 남은 승인 지점(저위험 세션이면 Research 하나, Spec에 진입했으면 Research·Spec 둘)에서 멈춘 채 상한만 소진한다.
 
 ### Exit Gate 정확한 위치
 
@@ -131,7 +131,7 @@ goal은 *턴 간 프롬프트*를 없애줄 뿐, 사용자 입력을 기다리�
 
 `--max=N`은 Review 호출 횟수를 센다(Respond 작업은 세지 않는다). 생략하면 구현 스코프는 5회가 기본값이다. `--max=3`은 예시값이니 리뷰 난이도에 맞게 조정하고, goal 상한 턴 수와 충돌하지 않게 여유를 둔다.
 
-**상한 도달은 수렴이 아니다.** 루프의 정지 조건은 일곱 가지이고 그중 수렴은 하나뿐 — 구현 스코프에서는 "APPROVE + Critical·Warning 0건 + deferred receipt 항목 전부 검증", 문서 스코프에서는 `READY_FOR_IMPLEMENTATION`이다. 나머지 **여섯 가지는 모두 미수렴 정지**다: 상한 도달, 비교 라운드 정체, 한 라운드 내 운영 실패 2회, 사용자 stop/DEFER, 신뢰 리뷰어 0명, 그리고 **accepted 0건 + implemented 0건 + halt 아님**.
+**상한 도달은 수렴이 아니다.** 루프의 정지 조건은 일곱 가지이고 그중 수렴은 하나뿐 — 구현 스코프에서는 "APPROVE + Critical·Warning 0건 + deferred receipt 항목 전부 검증", 문서 스코프에서는 `READY_FOR_IMPLEMENTATION`이다. 나머지 **여섯 가지는 모두 미수렴 정지**다: 상한 도달, 비교 라운드 정체, 한 라운드 내 운영 실패 2회, 사용자 stop/DEFER, 리뷰어가 실제로 서지 않음(`N_actual == 0`이거나 codex-only 라운드에 Codex role이 없음), 그리고 **accepted 0건 + implemented 0건 + halt 아님**.
 
 마지막 것을 특히 주의한다. deep-review는 이것을 "split-only `CONCERN` 라운드가 Respond를 건너뛸 때 즉시 발화하는 **의도된 조기 종료**"라고 설명한다 — 버그가 아니라 설계이며, 실무에서 가장 흔한 **조용한** 미수렴 정지다. 루프는 마지막 신뢰 verdict를 들고 정상 종료한 것처럼 보이므로, 종료조건을 "루프가 끝나면"으로 쓰면 여섯 가지 전부를 성공으로 받아들이게 된다.
 
