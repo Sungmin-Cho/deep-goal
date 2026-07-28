@@ -146,7 +146,11 @@ const FORMS = [
 // would make the deny-by-default verdict depend on which machine ran the test.
 // The consequence — that a `docs/…` path can never resolve in the plugin, and
 // so is invisible to this rule — is handled by NON_SHIPPED below, not by luck.
-const PLUGIN_FILES = (() => {
+// Injectable so the Windows key shape can be pinned in CI rather than only
+// verified once by hand: `toKey` is the single place a platform separator
+// enters the key set, and both sides of every later comparison go through
+// the same normalisation.
+function buildPluginFiles({ toKey = (p) => relative(ROOT, p) } = {}) {
   const rel = new Set();
   const skip = new Set(['node_modules', '.git', '.github', '.deep-review', 'docs', 'tests']);
   const walk = (d) => {
@@ -154,12 +158,19 @@ const PLUGIN_FILES = (() => {
       if (skip.has(e.name)) continue;
       const p = join(d, e.name);
       if (e.isDirectory()) walk(p);
-      else rel.add(relative(ROOT, p));
+      // Normalise the KEY as well as the lookup. `relative()` returns backslashes
+      // on Windows, so a raw key set and a normalised lookup are two different
+      // spellings and every `has()` misses — which makes deny-by-default report
+      // nothing and the guard pass while a violation is present. Silently green
+      // is the worst failure mode a guard has, and `ci.yml` runs windows-latest.
+      else rel.add(normalizePath(toKey(p)));
     }
   };
   walk(ROOT);
   return rel;
-})();
+}
+
+const PLUGIN_FILES = buildPluginFiles();
 
 // NON-SHIPPED PATHS.
 //
@@ -210,12 +221,14 @@ const ROOT_METADATA = new Set(['package.json', 'plugin.json', 'AGENTS.md', 'CLAU
 // gap outlived the first separator fix and the comment above it.
 const PATH_TOKEN = /[A-Za-z0-9_.@${}<>-]+(?:[\\/]+[A-Za-z0-9_.@{}|*-]+)+|[A-Za-z0-9_-]+\.[A-Za-z0-9]{1,6}\b/g;
 
-function resolvesInPlugin(token, sourceFile) {
+// `files` is injectable for the same reason `toKey` is: the Windows key shape
+// has to be pinnable in CI, not merely checked once by hand.
+function resolvesInPlugin(token, sourceFile, files = PLUGIN_FILES) {
   const clean = normalizePath(token).replace(/^\.\//, '');
-  if (PLUGIN_FILES.has(clean)) return true;
+  if (files.has(clean)) return true;
   try {
-    const fromSource = relative(ROOT, resolve(dirname(sourceFile), normalizePath(token)));
-    if (PLUGIN_FILES.has(fromSource)) return true;
+    const fromSource = normalizePath(relative(ROOT, resolve(dirname(sourceFile), normalizePath(token))));
+    if (files.has(fromSource)) return true;
   } catch { /* unresolvable token — prose */ }
   return false;
 }
@@ -856,4 +869,31 @@ test('every referenced plugin path resolves inside the root', () => {
   }
   assert.deepEqual(broken, [], `unresolvable or out-of-root reference:\n  ${broken.join('\n  ')}`);
   assert.ok(resolved > 0, 'sweep matched no references at all — the patterns have rotted');
+});
+
+test('normalisation is applied to both sides of every comparison (Windows emulation)', () => {
+  // On Windows the key builder returns backslash-joined keys. Patching only the
+  // key side reproduces that. A guard that normalises the lookup but not the key
+  // compares two different spellings and every `has()` misses — deny-by-default
+  // then reports nothing and the suite passes **while a violation is present**.
+  // Silently green is the worst state a guard can be in, and `ci.yml` runs
+  // windows-latest, so this is pinned here rather than verified once by hand.
+  const winKeys = buildPluginFiles({
+    toKey: (f) => relative(ROOT, f).split('/').join('\\'),
+  });
+  assert.ok(winKeys.has('skills/deep-goal-workflow/references/fitness-rubric.md'),
+    'key generation must normalise, not store what the platform produced');
+  // Nested source on purpose: from a root-level document `dirname` is ROOT, so
+  // the source-relative branch reproduces the direct branch and would rescue an
+  // un-normalised token side, hiding what this test claims to pin.
+  const nested = join(ROOT, 'skills/deep-goal-workflow/SKILL.md');
+  for (const spelling of ['skills/deep-goal-workflow/references/fitness-rubric.md', 'skills/deep-goal-workflow/references/fitness-rubric.md'.split('/').join('\\')]) {
+    assert.equal(resolvesInPlugin(spelling, nested, winKeys), true,
+      `lookup must resolve against Windows-shaped keys: ${spelling}`);
+  }
+  // Non-vacuity: the same lookups against a deliberately un-normalised key set
+  // must fail, or this test would pass however the keys were built.
+  const rawKeys = new Set([...winKeys].map((k) => k.split('/').join('\\')));
+  assert.equal(resolvesInPlugin('skills/deep-goal-workflow/references/fitness-rubric.md', nested, rawKeys), false,
+    'the pair is vacuous unless one-sided normalisation really breaks the lookup');
 });
