@@ -69,8 +69,8 @@ PLAN.md 내용:
 - 완료 보고: "Implement 완료"
 
 ## Phase 3(Implement) 완료 직후: deep-review-loop(--max=3)
-- APPROVE까지 반복
-- 결과 보고: "review verdict: APPROVE"
+- APPROVE + Critical·Warning 0건으로 수렴할 때까지 대응
+- 결과 보고: "review verdict: APPROVE, Critical/Warning 0"
 
 ## Phase 4: Test
 - 전체 테스트 실행
@@ -80,7 +80,7 @@ PLAN.md 내용:
 조건:
 ```
 PLAN.md 단계대로 완수. 각 게이트(Plan 승인·review verdict)를 대화에 보고한 뒤에만 다음 단계 진행.
-종료조건: 최종 deep-review-loop APPROVE AND `npm test` 전체 통과 AND 각 게이트 통과 보고 완료.
+종료조건: 최종 deep-review-loop이 APPROVE + Critical·Warning 0건으로 수렴(상한 도달 정지는 불인정) AND `npm test` 전체 통과 AND 각 게이트 통과 보고 완료.
 or stop after <N> turns.
 (N을 구체 숫자로 치환 — 예: 40)
 ```
@@ -110,7 +110,7 @@ Codex는 자체 판단으로 종료하므로 표면화 제약이 덜하지만, �
 ```
 [달성] deep-work 세션으로 <기능>을 Research→(risk class medium 이상이면 Spec)→Plan→Implement→Test 순으로 완수한다.
 [변경 금지] main 브랜치 직접 push 금지, 기존 API 시그니처 유지.
-[검증] `npm test` 전체 통과 AND deep-review-loop APPROVE.
+[검증] `npm test` 전체 통과 AND deep-review-loop이 APPROVE + Critical·Warning 0건으로 수렴.
 [종료] 검증 통과 시 완료.
 Plan 단계 완료 시 `pause`로 사용자 승인 요청. Implement 완료 직후 deep-review-loop(--max=3) 실행.
 진행 중 각 phase 체크포인트 로그 남길 것. PLAN.md 참조.

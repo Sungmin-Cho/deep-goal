@@ -31,8 +31,8 @@
 전제: 구현 완료 상태 가정
 
 [1] (deep-review 있으면) 최종 deep-review(또는 deep-review-loop --max=3) 실행
-    → verdict APPROVE까지 대응
-    → APPROVE가 대화에 보고된 뒤에만 [2]로 진행
+    → APPROVE + Critical·Warning 0건으로 수렴할 때까지 대응
+    → 그 수렴이 대화에 보고된 뒤에만 [2]로 진행 (상한 도달 정지는 통과 아님)
 
 [2] deep-docs garden 실행
     → 문서 정비 완료 보고
@@ -90,7 +90,7 @@ or stop after 30 turns.
 - deep-wiki wiki-ingest 완료 (대화에 보고됨)
 
 변경 금지: review 승인 이전 wiki-ingest 실행 금지.
-검증: review APPROVE → docs garden 완료 보고 → wiki-ingest 완료 보고.
+검증: review 수렴(APPROVE + Critical·Warning 0건) → docs garden 완료 보고 → wiki-ingest 완료 보고.
 
 각 단계 완료를 진행 로그에 명시 기록.
 pause 지점: review 미통과 시 대응, review 루프의 privacy·mutation·DEFER 질문, garden의 항목별 적용 선택.
@@ -121,4 +121,4 @@ garden은 **무인으로 돌지 않는다.** auto-fix 항목마다 diff를 보�
 
 ### 평가자 표면화 없으면 종료 판정 불가
 
-Claude 평가자는 도구 없이 대화 출력만 판정한다. review APPROVE, docs garden 완료, wiki-ingest 완료 각각을 대화에 명시 보고해야 평가자가 종료를 판정할 수 있다.
+Claude 평가자는 도구 없이 대화 출력만 판정한다. review 수렴(APPROVE + Critical·Warning 0건), docs garden 완료, wiki-ingest 완료 각각을 대화에 명시 보고해야 평가자가 종료를 판정할 수 있다.

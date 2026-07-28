@@ -22,10 +22,10 @@
 ### 수정됨
 
 - `robust-implementation` 레시피가 deep-work session receipt의 존재만으로 검증된 세션 완료를 증명한다고 보았다. deep-work는 Test 실패 세션에서도 receipt를 emit하므로, 컴파일되는 조건이 receipt의 `x-test-verified: true`를 요구하고 receipt가 실제로 담고 있는 필드로 stale 여부를 판정하도록 고쳤다.
-- 레시피와 README가 deep-work의 Spec phase를 명시한다. Research→Plan→Implement→Test만 나열한 조건은 게이트가 걸린 phase를 건너뛰라고 지시하는 셈이었다.
+- 레시피와 README가 deep-work의 Spec phase와 그것을 여는 risk class를 명시한다. Research→Plan→Implement→Test만 나열한 조건은 게이트가 걸린 phase를 건너뛰라고 지시했고, 반대로 Spec을 무조건 요구한 조건은 저위험 세션에서 영원히 충족되지 않았다.
 - `ship-and-document`은 여전히 review를 `wiki-ingest`보다 먼저 두지만 근거를 바로잡았다 — deep-wiki는 커밋을 journal로 감싸 중단된 ingest를 복구한다. 되돌릴 수 없는 것은 완료된 ingest다.
 - 사전 준비물 탐색 reference가 누락했던 `npm test` 폴백을 포함해 모든 unconfirmed 증명 커맨드 추정을 기술한다.
-- 레시피가 형제 플러그인이 제공하지 않는 무인 실행을 약속하지 않는다. deep-work는 Plan뿐 아니라 Research·Spec 완료 후에도 문서 승인을 요구하고, review 루프는 privacy·mutation 소유권·DEFER 질문을 계속 띄우며, `deep-docs garden`은 편집 전에 항목마다 묻는다. 컴파일된 조건이 이 지점들을 pause로 명시한다.
+- 레시피가 형제 플러그인이 제공하지 않는 무인 실행을 약속하지 않는다. deep-work는 Plan뿐 아니라 Research 완료 후에도(Spec에 진입한 세션이면 Spec 완료 후에도) 문서 승인을 요구하고, review 루프는 privacy·mutation 소유권·DEFER 질문을 계속 띄우며, `deep-docs garden`은 편집 전에 항목마다 묻는다. 컴파일된 조건이 이 지점들을 pause로 명시한다.
 - 라운드 상한에 도달해 멈춘 review 루프를 컴파일된 종료조건에서 수렴으로 치지 않는다. 수렴은 APPROVE + Critical·Warning 0건이다.
 - autonomous-evolution 조건이 목표치를 특정 evaluator에 고정하고, outer loop가 evaluator를 교체하면 보고하도록 요구한다. 장기 실행이 다른 척도를 조용히 측정하는 일을 막는다.
 
