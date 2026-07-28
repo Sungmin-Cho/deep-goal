@@ -223,11 +223,17 @@ const PATH_TOKEN = /[A-Za-z0-9_.@${}<>-]+(?:[\\/]+[A-Za-z0-9_.@{}|*-]+)+|[A-Za-z
 
 // `files` is injectable for the same reason `toKey` is: the Windows key shape
 // has to be pinnable in CI, not merely checked once by hand.
-function resolvesInPlugin(token, sourceFile, files = PLUGIN_FILES) {
+// `rel` is injectable alongside `files` because the `fromSource` normalisation
+// is otherwise unpinnable: on POSIX `relative()` already returns slashes, so
+// removing the normalisation is a no-op here and no mutation can see it. Only a
+// win32 `relative` exercises it, and it has to be injected into the production
+// call site — a copy of the logic in a test pins the test's arithmetic, not the
+// guard's.
+function resolvesInPlugin(token, sourceFile, files = PLUGIN_FILES, rel = relative) {
   const clean = normalizePath(token).replace(/^\.\//, '');
   if (files.has(clean)) return true;
   try {
-    const fromSource = normalizePath(relative(ROOT, resolve(dirname(sourceFile), normalizePath(token))));
+    const fromSource = normalizePath(rel(ROOT, resolve(dirname(sourceFile), normalizePath(token))));
     if (files.has(fromSource)) return true;
   } catch { /* unresolvable token — prose */ }
   return false;
@@ -931,4 +937,17 @@ test('normalisation is applied to both sides of every comparison (Windows emulat
   const rawKeys = new Set([...winKeys].map((k) => k.split('/').join('\\')));
   assert.equal(resolvesInPlugin('skills/deep-goal-workflow/references/fitness-rubric.md', nested, rawKeys), false,
     'the pair is vacuous unless one-sided normalisation really breaks the lookup');
+
+  // The `fromSource` half, exercised through the production call site with a win32
+  // `relative`. A relative token whose direct lookup misses must still resolve via
+  // the source-relative branch, which it can only do if that branch normalises its
+  // own result first. Nothing else can see this: on POSIX `relative()` already
+  // returns slashes, so removing the normalisation is a no-op.
+  const winRel = (from, to) => relative(from, to).split('/').join('\\');
+  assert.equal(
+    resolvesInPlugin('./fitness-rubric.md',
+      join(ROOT, 'skills', 'deep-goal-workflow', 'references', 'x.md'), winKeys, winRel),
+    true,
+    'the source-relative branch must normalise its own result before looking it up',
+  );
 });
