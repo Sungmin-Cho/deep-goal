@@ -14,7 +14,7 @@
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep, win32 } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -430,11 +430,24 @@ test('every skill and always-loaded markdown file has balanced code fences', () 
 });
 
 test('the always-loaded agent guides are in the scan set', () => {
-  const scanned = markdownFiles().map((f) => relative(ROOT, f));
+  // Root-level entries in ALWAYS_LOADED have no separator, so a Windows
+  // emulation over them alone cannot fail — it would be a decorative
+  // assertion. The derivation is pinned against a real nested document
+  // instead, which is where the spelling actually diverges. `relative` is a
+  // seam, not a switch: it defaults to the host's and turns nothing off.
+  const scanKeys = (rel = relative) =>
+    markdownFiles().map((f) => normalizePath(rel(ROOT, f)));
+  const scanned = scanKeys();
   for (const doc of ALWAYS_LOADED) {
     assert.ok(existsSync(join(ROOT, doc)), `${doc} must exist to be scanned`);
     assert.ok(scanned.includes(doc), `${doc} must be in the shadow-guard scan set`);
   }
+  const nested = scanned.find((k) => k.includes('/'));
+  assert.ok(nested,
+    'the scan set must hold a nested document, or the next assertion proves nothing');
+  assert.ok(scanKeys(win32.relative).includes(nested),
+    `the Windows spelling of ${nested} must be the same key as the host's — `
+    + 'otherwise every membership check against a slash literal misses there');
 });
 
 test('no read or exec instruction can be shadowed from the target workspace', () => {
