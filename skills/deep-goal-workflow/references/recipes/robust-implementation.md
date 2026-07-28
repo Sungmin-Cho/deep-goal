@@ -1,6 +1,6 @@
 # 레시피: robust-implementation
 
-deep-work의 게이트 강제 phase 진행과 deep-review-loop의 자동 수렴 게이트를 엮어, 검증된 구현을 goal로 자율 달성한다. **핵심 제약: deep-work의 Plan 승인은 필수 사용자 인터랙션이며, 승인 없이 자율 완주는 불가능하다.** 이 제약은 주의 문구가 아니라 컴파일된 조건 자체에 반영된다.
+deep-work의 게이트 강제 phase 진행과 deep-review-loop의 수렴 게이트를 엮어, 검증된 구현을 goal로 진행한다. **핵심 제약: 이 레시피는 무인 자율이 아니다.** Research·Spec·Plan 각각의 문서 승인, phase 경계마다의 Exit Gate, 그리고 review 루프의 일부 확인 질문이 모두 사용자 입력을 기다린다. 이 제약은 주의 문구가 아니라 컴파일된 조건 자체에 반영된다.
 
 ---
 
@@ -29,28 +29,30 @@ deep-work의 게이트 강제 phase 진행과 deep-review-loop의 자동 수렴 
 ## 시퀀스
 
 ```
-[1] deep-work Research 단계
+[1] deep-work Research 단계 → ★ research.md 승인 (사용자 입력) ★
     → [Exit Gate: 진행 / 재실행 / 일시정지]
 [2] deep-work Spec 단계 (task difficulty Medium 이상에서 자동 진입)
-    → spec-contract 검증 → [Exit Gate: 진행 / 재실행 / 일시정지]
-[3] deep-work Plan 단계 → ★ Plan 승인 (사용자 필수 인터랙션) ★
+    → spec-contract 검증 → ★ spec 승인 (사용자 입력) ★
+    → [Exit Gate: 진행 / 재실행 / 일시정지]
+[3] deep-work Plan 단계 → ★ plan.md 승인 (사용자 입력) ★
     → [Exit Gate: 진행 / 재실행 / 일시정지]
 [4] deep-work Implement 단계
-    → deep-review-loop(--max=3): verdict APPROVE까지 반복
+    → deep-review-loop(--max=3): APPROVE + Critical·Warning 0건까지 반복
+      (privacy·mutation 소유권·pre-staged·DEFER 질문은 사용자에게 그대로 감)
     → [Exit Gate: 진행 / 재실행 / 일시정지]
 [5] deep-work Test 단계
     → 테스트 전체 통과 확인
-    → [Exit Gate: Integrate 진행 또는 Finish]
+    → [Exit Gate 4지선다: Integrate / Finish / Test 재실행 / 일시정지]
 [6] deep-work Integrate 단계 (--skip-integrate로 스킵 가능)
     → 다음 단계 추천 루프 (interactive recommendation loop 자체가 게이트 역할)
 ```
 
 **게이트 정확도 기술 (deep-work-workflow/SKILL.md 대조):**
 
-- **Plan 승인**: deep-work의 "Plan 승인이 유일한 필수 인터랙션"(deep-work-workflow/SKILL.md 명세). 이 지점에서 반드시 사용자 입력이 필요하다. goal은 턴 간 프롬프트를 없애줄 뿐 이 승인 지점은 사용자 입력을 요구한다.
+- **문서 승인**: deep-work-workflow/SKILL.md는 "Plan 승인이 유일한 필수 인터랙션"이라고 적지만, orchestrator는 Research 완료 후에도(§Review + Approval Workflow → `research_approved`) Spec 완료 후에도 같은 승인 UX를 실행한다. 즉 승인 지점은 Research·Spec·Plan 셋이다. goal은 턴 간 프롬프트를 없애줄 뿐 이 지점들은 사용자 입력을 요구한다.
 - **Exit Gate**: Research·Spec·Plan·Implement 완료 직후 각각 "진행 / 재실행 / 일시정지" 확인. Test 완료 후에는 4지선다 Exit Gate(Integrate 진행 / Integrate 건너뛰고 Finish / Test 재실행 / 일시정지)가 있다.
 - **Integrate**: Exit Gate 확인 방식 대신 **interactive recommendation loop 자체가 게이트 역할**을 한다. `--skip-integrate`로 스킵 가능하며 `/deep-integrate`로 명시적 재진입도 가능.
-- **deep-review-loop**: `--max=N` 자동 수렴 루프라 게이트로 적합. 사람이 중간에 개입 없이 APPROVE까지 반복.
+- **deep-review-loop**: `--max=N`이 Review 호출 횟수를 제한한다(생략 시 구현 스코프 기본 5회). 루프 진입 고지가 **일반 응답 확인만** 미리 승인하며 privacy 경고·mutation 소유권·pre-staged 확인·DEFER 선택은 그대로 살아 있으므로, 완전 무인 루프로 가정하지 않는다. 수렴 종료는 "APPROVE + Critical·Warning 0건 + deferred receipt 항목 전부 검증"이고, 상한 도달은 수렴이 아닌 정지다.
 
 ---
 
@@ -59,8 +61,8 @@ deep-work의 게이트 강제 phase 진행과 deep-review-loop의 자동 수렴 
 다음이 **모두** 충족되어야 완료:
 
 1. deep-work 게이트 phase(Research / Spec / Plan / Implement / Test) 완료 (Integrate는 `--skip-integrate`로 스킵 가능)
-2. **모든 승인 게이트(Plan 승인·Implement Exit Gate) 통과가 대화에 보고됨** — 이 게이트는 종료조건의 일부이며, 보고 없이는 평가자가 종료를 판정할 수 없다
-3. 최종 deep-review-loop verdict가 APPROVE
+2. **모든 승인 게이트(Research·Spec·Plan 문서 승인, phase 경계 Exit Gate) 통과가 대화에 보고됨** — 이 게이트는 종료조건의 일부이며, 보고 없이는 평가자가 종료를 판정할 수 없다
+3. 최종 deep-review-loop이 수렴 종료 — verdict APPROVE이고 Critical·Warning 0건이며 deferred receipt 항목이 전부 검증됨 (상한 도달로 인한 정지는 충족이 아니다)
 4. 테스트 전체 통과
 5. **검증가능 anchor 확보**: `/deep-finish`를 종료 스텝으로 실행해 `$WORK_DIR/session-receipt.json`(M3 envelope: producer=deep-work, artifact_kind=session-receipt, schema.name=session-receipt)을 emit한다. 다음 세 가지를 대화에 보고한다 — payload의 **`x-test-verified: true`**, 이 receipt가 **현재 goal 세션**에서 나왔음(session/work dir 일치), **이전 세션 산출물이 아님**(stale 거부 — payload `started_at`/`finished_at` 최신성). 순수 self-report paste보다 이 tamper-evident anchor를 우선한다.
 
@@ -74,10 +76,10 @@ deep-work의 게이트 강제 phase 진행과 deep-review-loop의 자동 수렴 
 
 ```
 deep-work 세션으로 <기능>을 Research→Spec→Plan→Implement→Test 순으로 진행한다.
-deep-work의 Plan 승인과 Implement 완료 직후 Exit Gate에서는 사용자에게 승인을 요청하고, 승인이 대화에 보고된 뒤에만 다음 단계로 진행한다(승인 전 자율 진행 금지 — 이 게이트는 종료조건의 일부다).
-Implement 완료 직후 deep-review-loop(--max=3)를 돌려 verdict가 APPROVE가 될 때까지 대응한다.
+Research·Spec·Plan 각 문서 승인과 phase 경계의 Exit Gate에서는 사용자에게 확인을 요청하고, 확인이 대화에 보고된 뒤에만 다음 단계로 진행한다(승인 전 자율 진행 금지 — 이 게이트들은 종료조건의 일부다).
+Implement 완료 직후 deep-review-loop(--max=3)를 돌려 APPROVE + Critical·Warning 0건까지 대응한다. 루프가 privacy·mutation 소유권·pre-staged·DEFER 확인을 물으면 사용자에게 그대로 전달한다.
 Test 통과 후 `/deep-finish`를 실행해 `session-receipt.json`(producer=deep-work·artifact_kind=session-receipt)을 emit하고, payload의 `x-test-verified` 값과 그 receipt가 현재 세션 산출물임(이전 세션 아님)을 대화에 보고한다.
-종료조건: 모든 phase 완료 AND 모든 승인 게이트(Plan 승인·Exit Gate) 통과가 보고됨 AND 최종 deep-review-loop APPROVE AND `/deep-finish` session-receipt.json 확보(현재 세션·stale 아님) AND 그 payload의 `x-test-verified`가 true.
+종료조건: 모든 phase 완료 AND 모든 승인 게이트(Research·Spec·Plan 문서 승인, Exit Gate) 통과가 보고됨 AND 최종 deep-review-loop이 APPROVE + Critical·Warning 0건으로 수렴(상한 도달 정지는 불인정) AND `/deep-finish` session-receipt.json 확보(현재 세션·stale 아님) AND 그 payload의 `x-test-verified`가 true.
 각 단계 결과(phase 전환·승인 게이트·review verdict·테스트 출력)를 대화에 명시적으로 보고할 것.
 or stop after 40 turns.
 ```
@@ -89,10 +91,10 @@ or stop after 40 turns.
 
 달성 조건:
 - deep-work 게이트 phase 완료 (Research / Spec / Plan / Implement / Test)
-- Plan 승인 게이트 통과 보고됨 (사용자 승인 필수)
+- Research / Spec / Plan 문서 승인 통과 보고됨 (각각 사용자 승인 필수)
 - Implement Exit Gate 통과 보고됨 (사용자 확인 필수)
 - Test Exit Gate 통과 보고됨
-- deep-review-loop(--max=3) verdict APPROVE
+- deep-review-loop(--max=3)이 APPROVE + Critical·Warning 0건으로 수렴 (상한 도달 정지는 불인정)
 - 테스트 전체 통과
 - /deep-finish 실행으로 session-receipt.json 확보, payload의 x-test-verified가 true (아래 검증가능 anchor 계약)
 
@@ -101,7 +103,7 @@ or stop after 40 turns.
 검증가능 anchor: Test 통과 후 `/deep-finish`가 emit하는 `$WORK_DIR/session-receipt.json`(producer=deep-work, artifact_kind=session-receipt, schema.name=session-receipt)을 증명으로 참조. payload의 `x-test-verified`가 true인지, 이 receipt가 현재 goal 세션 산출물(session/work dir 일치)인지, 이전 세션 아님(stale 거부 — payload started_at/finished_at 최신성)을 진행 로그에 기록. receipt는 test 실패 세션에서도 emit되므로 x-test-verified 확인이 필수다. 순수 self-report 로그보다 이 tamper-evident anchor를 우선.
 
 각 phase 전환·게이트 결과를 진행 로그에 명시 기록.
-pause 지점: Plan 승인 요청, Exit Gate 확인.
+pause 지점: Research·Spec·Plan 문서 승인 요청, Exit Gate 확인, review 루프의 privacy·mutation·DEFER 질문.
 ```
 
 ---
@@ -110,19 +112,24 @@ pause 지점: Plan 승인 요청, Exit Gate 확인.
 
 ### 완전 무인 자율 불가
 
-deep-work의 **Plan 승인은 필수 사용자 인터랙션**이다(`deep-work-workflow/SKILL.md` 명세: "Plan 승인이 유일한 필수 인터랙션"). goal은 *턴 간 프롬프트*를 없애줄 뿐, Plan 승인 지점은 반드시 사용자 입력을 기다린다. 이 점을 사용자에게 사전 고지한다.
+goal은 *턴 간 프롬프트*를 없애줄 뿐, 사용자 입력을 기다리는 지점 자체를 없애지 않는다. 이 레시피에는 그런 지점이 최소 세 종류 있다 — **Research·Spec·Plan 문서 승인**, **phase 경계마다의 Exit Gate**, **deep-review-loop이 privacy·mutation 소유권·pre-staged·DEFER를 물을 때**. 이 점을 사용자에게 사전 고지한다.
+
+`deep-work-workflow/SKILL.md`는 "Plan 승인이 유일한 필수 인터랙션"이라고 적지만 그 문장은 orchestrator보다 오래됐다. orchestrator는 Research와 Spec 완료 후에도 같은 문서 승인 UX를 실행한다. 승인 지점을 Plan 하나로 가정한 조건은 나머지 두 곳에서 멈춘 채 상한만 소진한다.
 
 ### Exit Gate 정확한 위치
 
-- Research 완료 직후 → Exit Gate (진행 / 재실행 / 일시정지)
-- Plan 완료 직후 → Exit Gate (진행 / 재실행 / 일시정지)
+- Research 완료 직후 → 문서 승인 → Exit Gate (진행 / 재실행 / 일시정지)
+- Spec 완료 직후 → spec-contract 검증 + 승인 → Exit Gate (진행 / 재실행 / 일시정지)
+- Plan 완료 직후 → 문서 승인 → Exit Gate (진행 / 재실행 / 일시정지)
 - Implement 완료 직후 → Exit Gate (진행 / 재실행 / 일시정지)
 - Test 완료 직후 → Exit Gate 4지선다 (Integrate 진행 / Integrate 건너뛰고 Finish / Test 재실행 / 일시정지)
 - Integrate: Exit Gate 형식이 아닌 **interactive recommendation loop 자체가 게이트 역할** (deep-work-workflow/SKILL.md 명세)
 
 ### deep-review-loop 상한
 
-`--max=3`은 예시값이다. 리뷰 난이도에 따라 조정한다. 상한에 도달하면 자동 종료되므로 goal 상한 턴 수와 충돌하지 않도록 여유를 둔다.
+`--max=N`은 Review 호출 횟수를 센다(Respond 작업은 세지 않는다). 생략하면 구현 스코프는 5회가 기본값이다. `--max=3`은 예시값이니 리뷰 난이도에 맞게 조정하고, goal 상한 턴 수와 충돌하지 않게 여유를 둔다.
+
+**상한 도달은 수렴이 아니다.** 루프의 정지 조건은 일곱 가지이고 그중 수렴은 하나뿐 — 구현 스코프에서는 "APPROVE + Critical·Warning 0건 + deferred receipt 항목 전부 검증", 문서 스코프에서는 `READY_FOR_IMPLEMENTATION`이다. 상한 도달·비교 라운드 정체·운영 실패·사용자 DEFER·신뢰 리뷰어 0명은 모두 미수렴 정지다. 종료조건을 "루프가 끝나면"으로 쓰면 이 다섯 가지를 성공으로 받아들이게 된다.
 
 ### 평가자 표면화 없으면 종료 판정 불가
 

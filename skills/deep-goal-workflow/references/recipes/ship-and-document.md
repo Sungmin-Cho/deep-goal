@@ -41,7 +41,7 @@
     → wiki 반영 완료 보고
 ```
 
-**영속 게이트 선행 이유**: deep-wiki는 커밋을 journal로 감싸므로 **중단된** ingest는 복구되고 wiki는 pre-commit 상태로 남는다. 그러나 **성공적으로 커밋된** ingest는 그대로 durable하며, deep-wiki에는 un-ingest 루트가 없다 — 되돌리려면 wiki 쪽에서 사람이 손으로 고쳐야 한다. 잘못된 구현이 wiki에 반영되지 않도록 **review 승인 이후에만** 영속 작업을 수행한다.
+**영속 게이트 선행 이유**: deep-wiki는 커밋을 journal로 감싸므로 **중단·취소된** ingest는 rollback되어 wiki가 pre-commit 상태로 남는다. 그러나 rollback은 실패한 트랜잭션에만 작동한다 — **성공적으로 커밋된** ingest에는 un-ingest 커맨드가 없다. 잘못된 구현이 wiki에 반영되지 않도록 **review 승인 이후에만** 영속 작업을 수행한다.
 
 ### 부득이 review가 영속 후인 경우
 
@@ -56,8 +56,8 @@
 
 다음이 **모두** 충족되어야 완료:
 
-1. (deep-review 있으면) 최종 deep-review verdict APPROVE가 대화에 보고됨
-2. deep-docs garden 완료가 대화에 보고됨
+1. (deep-review 있으면) 최종 deep-review가 APPROVE + Critical·Warning 0건으로 수렴했음이 대화에 보고됨 — 상한 도달로 인한 정지는 충족이 아니다
+2. deep-docs garden 완료가 대화에 보고됨 (auto-fix 항목마다 사용자 선택을 거친 뒤)
 3. deep-wiki wiki-ingest 완료가 대화에 보고됨
 
 각 결과를 대화에 명시 보고한다. 보고 없이는 Claude 평가자가 종료를 판정하지 못한다.
@@ -70,10 +70,10 @@
 
 ```
 구현이 완료된 상태에서 배포·문서화를 진행한다.
-(1) deep-review-loop(--max=3)로 최종 코드 리뷰를 수행하고 verdict APPROVE를 받는다. APPROVE가 대화에 보고된 뒤에만 다음 단계로 진행한다.
-(2) deep-docs garden으로 프로젝트 문서(CLAUDE.md, AGENTS.md 등)를 정비한다. 완료 결과를 대화에 보고한다.
+(1) deep-review-loop(--max=3)로 최종 코드 리뷰를 수행해 APPROVE + Critical·Warning 0건까지 대응한다. 이 수렴이 대화에 보고된 뒤에만 다음 단계로 진행한다(상한 도달 정지는 통과가 아니다).
+(2) deep-docs garden으로 프로젝트 문서(CLAUDE.md, AGENTS.md 등)를 정비한다. garden은 항목마다 적용/건너뛰기 선택을 사용자에게 묻는다 — 그 질문을 그대로 전달하고, 완료 결과를 대화에 보고한다.
 (3) deep-wiki wiki-ingest로 wiki를 최신 상태로 반영한다. 완료 결과를 대화에 보고한다.
-종료조건: review APPROVE 보고됨 AND docs garden 완료 보고됨 AND wiki-ingest 완료 보고됨.
+종료조건: review 수렴 보고됨 AND docs garden 완료 보고됨 AND wiki-ingest 완료 보고됨.
 불변 제약: review 승인 이전에 wiki-ingest 실행 금지.
 각 단계 결과를 대화에 명시적으로 보고할 것.
 or stop after 30 turns.
@@ -85,15 +85,15 @@ or stop after 30 turns.
 목표: 구현 완료 후 리뷰 → 문서화 → wiki 반영 순으로 배포·문서화를 완수한다.
 
 달성 조건:
-- deep-review-loop(--max=3) verdict APPROVE (대화에 보고됨)
-- deep-docs garden 완료 (대화에 보고됨)
+- deep-review-loop(--max=3)이 APPROVE + Critical·Warning 0건으로 수렴 (대화에 보고됨, 상한 도달 정지는 불인정)
+- deep-docs garden 완료 (대화에 보고됨 — 항목별 사용자 선택을 거친 뒤)
 - deep-wiki wiki-ingest 완료 (대화에 보고됨)
 
 변경 금지: review 승인 이전 wiki-ingest 실행 금지.
 검증: review APPROVE → docs garden 완료 보고 → wiki-ingest 완료 보고.
 
 각 단계 완료를 진행 로그에 명시 기록.
-pause 지점: review 미통과 시 대응 필요.
+pause 지점: review 미통과 시 대응, review 루프의 privacy·mutation·DEFER 질문, garden의 항목별 적용 선택.
 ```
 
 ---
@@ -102,7 +102,7 @@ pause 지점: review 미통과 시 대응 필요.
 
 ### 영속 작업 순서 불변 원칙
 
-커밋이 끝난 `wiki-ingest`는 되돌리는 플러그인 루트가 없고, wiki root가 저장소 밖(예: 동기화되는 Obsidian vault)일 수도 있다. **반드시 review 승인 이후에 배치한다.** 이 순서를 뒤집으면 잘못된 내용이 wiki에 남는다.
+커밋이 끝난 `wiki-ingest`는 되돌리는 플러그인 루트가 없다. 남는 복구 수단은 페이지당 `.wiki-meta/.versions/`의 최근 3개 백업과 사람의 수동 편집뿐이고, wiki root는 저장소 밖(예: 동기화되는 Obsidian vault)이라 git 이력에도 남지 않는다. **반드시 review 승인 이후에 배치한다.** 이 순서를 뒤집으면 잘못된 내용이 wiki에 남는다.
 
 ### review 게이트 없는 경우
 
@@ -115,7 +115,9 @@ pause 지점: review 미통과 시 대응 필요.
 
 ### deep-docs garden의 자동 수정 범위
 
-garden은 자동 수정 가능 항목만 처리한다. audit-only 항목(크기 초과, 규칙 모순 등)은 사람이 별도 검토가 필요하다. goal 종료 후 `/deep-docs audit`으로 추가 검토를 권장한다.
+garden은 **무인으로 돌지 않는다.** auto-fix 항목마다 diff를 보여주고 A(적용)/B(1회 건너뛰기)/C(건너뛰고 기록) + 배치 D/E의 선택을 사용자에게 묻는다. 즉 `deep-docs garden 완료`는 사용자 응답 없이 도달할 수 없는 종료조건이며, 컴파일된 조건은 이 지점을 pause로 명시해야 한다.
+
+처리 대상도 두 갈래가 아니라 세 갈래다 — auto-fix 항목, audit-only 항목(크기 초과, 규칙/코드 모순, 커버리지 갭 등 — 자동 편집으로 승격되지 않는다), 그리고 문서를 새로 쓰거나 재구성하는 authoring 항목(`payload.gaps[]`). authoring은 auto-fix와 별개의 변경 유형이므로 goal 범위에 넣을지 사용자에게 확인한다. audit-only는 goal 종료 후 `/deep-docs audit`으로 별도 검토를 권장한다.
 
 ### 평가자 표면화 없으면 종료 판정 불가
 
