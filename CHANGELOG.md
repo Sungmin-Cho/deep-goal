@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recipes and README now name deep-work's Spec phase; a compiled condition that listed Research→Plan→Implement→Test told the agent past a gated phase.
 - `ship-and-document` still orders review before `wiki-ingest`, but for the right reason: deep-wiki journals the commit and recovers an interrupted one — what cannot be undone is a completed ingest.
 - The prerequisite-scouting reference now describes every unconfirmed proof-command guess, including the `npm test` fallback it omitted.
+- Recipes no longer promise unattended runs the sibling plugins do not offer: deep-work asks for document approval after Research and Spec as well as Plan, the review loop still raises privacy, mutation-ownership and defer questions, and `deep-docs garden` asks per issue before editing. Compiled conditions now name these as pause points instead of stalling at them.
+- A review loop that stops by reaching its round cap no longer counts as convergence in a compiled termination condition; convergence means APPROVE with zero Critical and Warning issues.
+- The autonomous-evolution condition now pins its target to a named evaluator and asks for a report if the outer loop replaces it, so a long run cannot silently start measuring a different scale.
 
 ### Security
 
