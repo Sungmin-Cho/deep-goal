@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.1] — 2026-07-28
+
+### Changed
+
+- `AGENTS.md` is now the single agent guide for both hosts and `CLAUDE.md` imports it, roughly halving the always-loaded guide text.
+- Both skill bodies and their descriptions are shorter, with every trigger phrase preserved.
+- The version lookup shown in the agent guide is now `npm pkg get version`.
+
+### Removed
+
+- Duplicated verification, directory-tree and release-workflow sections that restated what the manifests and `npm run verify` already define.
+
+### Security
+
+- Every plugin file a skill tells an agent to open or run is now anchored at the installed plugin root, so a repository under analysis can no longer shadow a deep-goal document or script with a same-named file of its own. A reference-integrity test enforces the rule and fails the build on a bare path.
+- Fixed a workflow cross-reference that pointed at a path which did not exist inside the plugin and would have resolved against the analysed project instead.
+
+---
+
 ## [1.2.0] — 2026-07-11
 
 ### Added

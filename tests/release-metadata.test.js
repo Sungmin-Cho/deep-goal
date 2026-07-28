@@ -63,6 +63,7 @@ function normalizeChangelogHeadings(source) {
     else if (/^(?:Changed|변경됨)$/.test(title)) normalized = 'changed';
     else if (/^(?:Removed|제거됨)$/.test(title)) normalized = 'removed';
     else if (/^(?:Fixed|수정됨)$/.test(title)) normalized = 'fixed';
+    else if (/^(?:Security|보안)$/.test(title)) normalized = 'security';
     assert.ok(normalized, `unknown CHANGELOG heading: ${title}`);
     return `${level}:${normalized}`;
   });
@@ -94,10 +95,10 @@ function assertNode22WindowsContract(source, language) {
   );
 }
 
-test('release versions and manifest host claims are pinned to 1.2.0', () => {
+test('release versions and manifest host claims are pinned to 1.2.1', () => {
   assert.deepEqual(
     [claudeManifest.version, codexManifest.version, packageJson.version],
-    ['1.2.0', '1.2.0', '1.2.0'],
+    ['1.2.1', '1.2.1', '1.2.1'],
   );
   assert.equal(packageJson.engines?.node, '>=22');
 
@@ -110,23 +111,23 @@ test('release versions and manifest host claims are pinned to 1.2.0', () => {
   assert.equal(Object.hasOwn(codexManifest, 'mcpServers'), false);
 });
 
-test('bilingual changelogs publish matching 1.2.0 release sections and dates', () => {
+test('bilingual changelogs publish matching 1.2.1 release sections and dates', () => {
   const english = text('CHANGELOG.md');
   const korean = text('CHANGELOG.ko.md');
   const englishHeading = firstVersionHeading(english);
   const koreanHeading = firstVersionHeading(korean);
 
-  assert.match(englishHeading, /^\[1\.2\.0\] — \d{4}-\d{2}-\d{2}$/);
-  assert.match(koreanHeading, /^\[1\.2\.0\] — \d{4}-\d{2}-\d{2}$/);
+  assert.match(englishHeading, /^\[1\.2\.1\] — \d{4}-\d{2}-\d{2}$/);
+  assert.match(koreanHeading, /^\[1\.2\.1\] — \d{4}-\d{2}-\d{2}$/);
   assert.equal(englishHeading.slice(-10), koreanHeading.slice(-10));
   assert.deepEqual(normalizeChangelogHeadings(english), normalizeChangelogHeadings(korean));
 
-  const englishRelease = versionSection(english, '1.2.0');
-  const koreanRelease = versionSection(korean, '1.2.0');
-  for (const heading of ['### Added', '### Changed', '### Removed']) {
+  const englishRelease = versionSection(english, '1.2.1');
+  const koreanRelease = versionSection(korean, '1.2.1');
+  for (const heading of ['### Changed', '### Removed', '### Security']) {
     assert.match(englishRelease, new RegExp(`^${heading}$`, 'm'));
   }
-  for (const heading of ['### 추가됨', '### 변경됨', '### 제거됨']) {
+  for (const heading of ['### 변경됨', '### 제거됨', '### 보안']) {
     assert.match(koreanRelease, new RegExp(`^${heading}$`, 'm'));
   }
   assert.doesNotMatch(
@@ -189,27 +190,37 @@ test('contributor guide documents the portable Node release chain', () => {
   assert.match(contributing, /no (?:MCP|`\.mcp\.json`)/i);
 });
 
-test('Claude and Codex maintainer guides name only the Node verification surface', () => {
-  const versionLookup = `node -e "const p=JSON.parse(require('node:fs').readFileSync('.claude-plugin/plugin.json','utf8')); console.log(p.version)"`;
+test('the shared agent guide names only the Node verification surface', () => {
+  const guide = text('AGENTS.md');
 
-  for (const guidePath of ['CLAUDE.md', 'AGENTS.md']) {
-    const guide = text(guidePath);
-    assert.match(guide, /Node\.js 22/);
-    assert.match(guide, /native Windows 11/i);
-    assert.match(guide, /(?:without|no requirement for) Git Bash/i);
-    assert.match(guide, /npm test/);
-    assert.match(guide, /npm run verify/);
-    assert.match(guide, /scripts\/verify-plugin\.js/);
-    assert.match(guide, /scripts\/lib\/release-validator\.js/);
-    assert.match(guide, /node --test/);
-    assert.ok(guide.includes(versionLookup), `${guidePath}: portable version lookup`);
-    assert.doesNotMatch(
-      guide,
-      /\bjq\b|verify-plugin\.sh|verify-selftest\.sh|verify-probe\.sh|bash scripts\//,
-    );
-    assert.match(guide, /docs\/DOCS_RULE\.md/);
-    assert.match(guide, /no `?hooks\/?`?/i);
-    assert.match(guide, /no `?agents\/?`?/i);
-    assert.match(guide, /no (?:MCP|`\.mcp\.json`)/i);
-  }
+  assert.match(guide, /Node\.js 22/);
+  assert.match(guide, /native Windows 11/i);
+  assert.match(guide, /(?:without|no requirement for) Git Bash/i);
+  assert.match(guide, /npm test/);
+  assert.match(guide, /npm run verify/);
+  assert.match(guide, /scripts\/verify-plugin\.js/);
+  assert.match(guide, /scripts\/lib\/release-validator\.js/);
+  assert.match(guide, /node --test/);
+  // A path-free lookup. The previous `node -e` one-liner named
+  // `.claude-plugin/plugin.json` relative to the current working directory,
+  // which is the shadowable form the reference-integrity guard rejects; the
+  // version triple-sync check keeps package.json equal to both manifests.
+  assert.ok(guide.includes('npm pkg get version'), 'AGENTS.md: portable version lookup');
+  assert.doesNotMatch(
+    guide,
+    /\bjq\b|verify-plugin\.sh|verify-selftest\.sh|verify-probe\.sh|bash scripts\//,
+  );
+  assert.match(guide, /docs\/DOCS_RULE\.md/);
+  assert.match(guide, /no `?hooks\/?`?/i);
+  assert.match(guide, /no `?agents\/?`?/i);
+  assert.match(guide, /no (?:MCP|`\.mcp\.json`)/i);
+});
+
+test('CLAUDE.md imports the shared guide and AGENTS.md stays self-contained', () => {
+  // One shared file, two hosts: AGENTS.md carries every shared rule and takes no
+  // `@`-import of its own, because Codex does not support them. CLAUDE.md is the
+  // import plus Claude-only content, and the direction is never reversed.
+  assert.match(text('CLAUDE.md'), /^@AGENTS\.md$/m);
+  assert.doesNotMatch(text('AGENTS.md'), /^@[A-Za-z]/m);
+  assert.doesNotMatch(text('AGENTS.md'), /^@CLAUDE\.md$/m);
 });

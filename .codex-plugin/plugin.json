@@ -1,6 +1,6 @@
 {
   "name": "deep-goal",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Goal condition compiler for long-running work in Claude Code and Codex",
   "author": { "name": "Sungmin-Cho" },
   "repository": "https://github.com/Sungmin-Cho/claude-deep-goal.git",
