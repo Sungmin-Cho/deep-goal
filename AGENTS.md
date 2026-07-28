@@ -2,7 +2,8 @@
 
 Goal condition compiler. It judges whether a long-running request fits the native `/goal` feature,
 reshapes it, scouts prerequisites, and compiles a ready-to-paste condition. Claude Code and Codex
-share this file — it is the single source for both, so it carries no `@`-imports (Codex has none).
+share this file — it is the single source for both, and it carries no `@`-import of its own because
+Codex does not support them.
 
 Release history lives in `CHANGELOG.md` / `CHANGELOG.ko.md`; README owns what the plugin is and how
 to use it. Read the current version, never hardcode it: `npm pkg get version`.
