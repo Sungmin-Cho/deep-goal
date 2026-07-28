@@ -233,7 +233,7 @@ function resolvesInPlugin(token, sourceFile, files = PLUGIN_FILES, rel = relativ
   const clean = normalizePath(token).replace(/^\.\//, '');
   if (files.has(clean)) return true;
   try {
-    const fromSource = normalizePath(rel(ROOT, resolve(dirname(sourceFile), normalizePath(token))));
+    const fromSource = normalizePath(rel(ROOT, resolve(dirname(sourceFile), clean)));
     if (files.has(fromSource)) return true;
   } catch { /* unresolvable token — prose */ }
   return false;
@@ -935,8 +935,12 @@ test('normalisation is applied to both sides of every comparison (Windows emulat
   // Non-vacuity: the same lookups against a deliberately un-normalised key set
   // must fail, or this test would pass however the keys were built.
   const rawKeys = new Set([...winKeys].map((k) => k.split('/').join('\\')));
-  assert.equal(resolvesInPlugin('skills/deep-goal-workflow/references/fitness-rubric.md', nested, rawKeys), false,
-    'the pair is vacuous unless one-sided normalisation really breaks the lookup');
+  // Backslash token on purpose. With a slash token this pair is decorative: the
+  // un-normalised key set misses either way, so it passes however the token was
+  // handled. The backslash spelling is the one that discriminates — without token
+  // normalisation it matches the backslash keys and the assertion fails.
+  assert.equal(resolvesInPlugin('skills\\deep-goal-workflow\\references\\fitness-rubric.md', nested, rawKeys), false,
+    'un-normalised keys must not be reachable by an un-normalised token');
 
   // The `fromSource` half, exercised through the production call site with a win32
   // `relative`. A relative token whose direct lookup misses must still resolve via
