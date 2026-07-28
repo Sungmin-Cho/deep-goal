@@ -30,29 +30,29 @@ deep-work의 게이트 강제 phase 진행과 deep-review-loop의 수렴 게이�
 
 ```
 [1] deep-work Research 단계 → ★ research.md 승인 (사용자 입력) ★
+    → (risk class medium|high|critical이면 Spec 단계로 자동 진입;
+       low는 사용자가 명시적으로 opt-in할 때만. risk class는 task difficulty가
+       아니라 risk-profile-cli가 task 내용·difficulty·policy를 합쳐 산출한다)
+       → spec-contract 검증 → ★ spec 승인 (사용자 입력) ★
+    → [Exit Gate (Phase 1 → Phase 2): 진행 / 재실행 / 일시정지]
+       ※ Research와 Spec을 통틀어 Exit Gate는 여기 한 번뿐이다.
+[2] deep-work Plan 단계 → ★ plan.md 승인 (사용자 입력) ★
     → [Exit Gate: 진행 / 재실행 / 일시정지]
-[2] deep-work Spec 단계 — risk class medium|high|critical에서만 자동 진입
-    (low는 사용자가 명시적으로 opt-in할 때만; risk class는 task difficulty가
-     아니라 risk-profile-cli가 task 내용·difficulty·policy를 합쳐 산출한다)
-    → spec-contract 검증 → ★ spec 승인 (사용자 입력) ★
-    → [Exit Gate: 진행 / 재실행 / 일시정지]
-[3] deep-work Plan 단계 → ★ plan.md 승인 (사용자 입력) ★
-    → [Exit Gate: 진행 / 재실행 / 일시정지]
-[4] deep-work Implement 단계
+[3] deep-work Implement 단계
     → deep-review-loop(--max=3): APPROVE + Critical·Warning 0건까지 반복
       (privacy·mutation 소유권·pre-staged·DEFER 질문은 사용자에게 그대로 감)
     → [Exit Gate: 진행 / 재실행 / 일시정지]
-[5] deep-work Test 단계
+[4] deep-work Test 단계
     → 테스트 전체 통과 확인
     → [Exit Gate 4지선다: Integrate / Finish / Test 재실행 / 일시정지]
-[6] deep-work Integrate 단계 (--skip-integrate로 스킵 가능)
+[5] deep-work Integrate 단계 (--skip-integrate로 스킵 가능)
     → 다음 단계 추천 루프 (interactive recommendation loop 자체가 게이트 역할)
 ```
 
 **게이트 정확도 기술 (deep-work-workflow/SKILL.md 대조):**
 
 - **문서 승인**: deep-work-workflow/SKILL.md는 "Plan 승인이 유일한 필수 인터랙션"이라고 적지만, orchestrator는 Research 완료 후에도(§Review + Approval Workflow → `research_approved`) Spec 완료 후에도 같은 승인 UX를 실행한다. 즉 승인 지점은 Research·Plan에 더해, Spec에 진입한 세션이면 Spec까지다. goal은 턴 간 프롬프트를 없애줄 뿐 이 지점들은 사용자 입력을 요구한다.
-- **Exit Gate**: Research·Plan·Implement(그리고 진입 시 Spec) 완료 직후 각각 "진행 / 재실행 / 일시정지" 확인. Test 완료 후에는 4지선다 Exit Gate(Integrate 진행 / Integrate 건너뛰고 Finish / Test 재실행 / 일시정지)가 있다.
+- **Exit Gate**: phase 경계마다 "진행 / 재실행 / 일시정지" 확인. 단 **Research와 Spec은 Exit Gate를 공유한다** — Spec은 Research 승인 뒤에 돌고, 그 다음 단일 `Exit Gate (Phase 1 → Phase 2)`가 한 번 온다(아래 §Exit Gate 정확한 위치). Test 완료 후에는 4지선다 Exit Gate(Integrate 진행 / Integrate 건너뛰고 Finish / Test 재실행 / 일시정지)가 있다.
 - **Integrate**: Exit Gate 확인 방식 대신 **interactive recommendation loop 자체가 게이트 역할**을 한다. `--skip-integrate`로 스킵 가능하며 `/deep-integrate`로 명시적 재진입도 가능.
 - **deep-review-loop**: `--max=N`이 Review 호출 횟수를 제한한다(생략 시 구현 스코프 기본 5회). 루프 진입 고지가 **일반 응답 확인만** 미리 승인하며 privacy 경고·mutation 소유권·pre-staged 확인·DEFER 선택은 그대로 살아 있으므로, 완전 무인 루프로 가정하지 않는다. 수렴 종료는 "APPROVE + Critical·Warning 0건 + deferred receipt 항목 전부 검증"이고, 상한 도달은 수렴이 아닌 정지다.
 
@@ -120,8 +120,13 @@ goal은 *턴 간 프롬프트*를 없애줄 뿐, 사용자 입력을 기다리�
 
 ### Exit Gate 정확한 위치
 
-- Research 완료 직후 → 문서 승인 → Exit Gate (진행 / 재실행 / 일시정지)
-- Spec 완료 직후(진입한 세션에 한해) → spec-contract 검증 + 승인 → Exit Gate (진행 / 재실행 / 일시정지)
+- Research 완료 직후 → 문서 승인. **여기에는 Exit Gate가 없다.**
+- Spec은 진입한 세션에 한해 그 승인 **뒤에** 돌고, spec-contract 검증 + 승인으로 끝난다.
+- 그 다음에야 단일 `Exit Gate (Phase 1 → Phase 2)` (진행 / 재실행 / 일시정지)가 온다.
+  Research와 Spec을 통틀어 한 번뿐이며, orchestrator도 resume 시 이 하나만 재표시한다
+  (`deep-work/skills/deep-work-orchestrator/SKILL.md` §Spec Subphase Gate "→ 아래 Exit Gate 실행",
+  §Exit Gate (Phase 1 → Phase 2), 그리고 "아래 Research Exit Gate만 재표시").
+  Spec 뒤에 별도 Exit Gate를 기대하는 조건은 오지 않을 보고를 기다리며 상한만 태운다.
 - Plan 완료 직후 → 문서 승인 → Exit Gate (진행 / 재실행 / 일시정지)
 - Implement 완료 직후 → Exit Gate (진행 / 재실행 / 일시정지)
 - Test 완료 직후 → Exit Gate 4지선다 (Integrate 진행 / Integrate 건너뛰고 Finish / Test 재실행 / 일시정지)

@@ -76,5 +76,6 @@ generic CI uses the pinned Node contract test instead.
    npm run preflight
    ```
 
-   `release:bump` writes `.claude-plugin/marketplace.json` only — sync
-   `.agents/plugins/marketplace.json` by hand in the same commit.
+   `release:bump` writes both manifests, and validates both before writing
+   either, so they cannot end up pinned to different commits. Do not hand-sync
+   the Codex mirror.

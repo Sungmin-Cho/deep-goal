@@ -201,7 +201,14 @@ const ROOT_METADATA = new Set(['package.json', 'plugin.json', 'AGENTS.md', 'CLAU
   'SECURITY.md', 'LICENSE', 'SKILL.md']);
 
 // Path-shaped tokens: multi-segment paths, plus dotted single segments.
-const PATH_TOKEN = /[A-Za-z0-9_.@${}<>-]+(?:[\\/][A-Za-z0-9_.@{}|*-]+)+|[A-Za-z0-9_-]+\.[A-Za-z0-9]{1,6}\b/g;
+// The `+` on the separator class is load-bearing. Without it a run of
+// separators breaks the segment repetition, the whole-path alternative fails,
+// and the tokeniser falls back to the bare-basename alternative — which
+// resolves to nothing, so deny-by-default never sees the path. `.js` names
+// survived that gap because the executable-token FORM's body class spans a run
+// on its own; `.md` with no read verb has no such umbrella, which is why the
+// gap outlived the first separator fix and the comment above it.
+const PATH_TOKEN = /[A-Za-z0-9_.@${}<>-]+(?:[\\/]+[A-Za-z0-9_.@{}|*-]+)+|[A-Za-z0-9_-]+\.[A-Za-z0-9]{1,6}\b/g;
 
 function resolvesInPlugin(token, sourceFile) {
   const clean = normalizePath(token).replace(/^\.\//, '');
@@ -639,6 +646,12 @@ test('a backslash separator does not hide a path from the guard', () => {
     ['read-verb backslash', 'Read `scripts\\lib\\proof-gate.js`'],
     ['mixed separators', 'Run `node scripts\\lib/proof-gate.js` to start.'],
     ['read-verb mixed', 'Read `skills/deep-goal\\SKILL.md` first.'],
+    // The rows below carry no read verb and no runnable extension, so the
+    // executable-token FORM cannot cover for the tokeniser. They are the only
+    // rows that actually exercise the `+` on PATH_TOKEN's separator class.
+    ['run, .md, no verb', 'The workflow lives at skills//deep-goal-workflow//SKILL.md today.'],
+    ['backslash run, .md, no verb', 'The workflow lives at skills\\\\deep-goal-workflow\\\\SKILL.md today.'],
+    ['mixed run, .md, no verb', 'The workflow lives at skills\\/deep-goal-workflow/\\SKILL.md today.'],
   ];
   for (const [label, line] of TABLE) {
     assert.ok(shadowableTokens(line).length > 0, `${label} must be flagged: ${line}`);
