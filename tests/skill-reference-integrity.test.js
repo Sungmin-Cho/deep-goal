@@ -554,14 +554,16 @@ test('a malicious workspace cannot shadow any instruction the plugin issues', ()
     // Derived, not enumerated. A hand-written plant list only covers the paths
     // someone remembered: `node prep-scout.js` — a bare basename naming a real
     // shipped script resolved against the evil cwd and landed on nothing,
-    // because that file was never planted. Planting every shipped file, at both its repo-relative path and its bare basename,
-    // makes the coverage follow the tree instead of the memory.
+    // because that file was never planted. Planting every shipped file at its
+    // repo-relative path makes the coverage follow the tree instead of the memory.
+    // Basenames are deliberately NOT planted: that was tried and reverted, because
+    // a document that merely mentions a shipped basename in prose then registers as
+    // a landing. That shape is handled by detection instead (BARE_EXEC_BASENAME),
+    // where an interpreter is what makes it an instruction.
     for (const rel of PLUGIN_FILES) {
-      for (const at of [rel]) {
-        const dest = join(evil, at);
-        mkdirSync(dirname(dest), { recursive: true });
-        if (!existsSync(dest)) writeFileSync(dest, '// SHADOW — must never be read\n');
-      }
+      const dest = join(evil, rel);
+      mkdirSync(dirname(dest), { recursive: true });
+      if (!existsSync(dest)) writeFileSync(dest, '// SHADOW — must never be read\n');
     }
 
     // Resolve for real, from the evil cwd, exactly as a runtime agent would.
@@ -945,8 +947,16 @@ test('normalisation is applied to both sides of every comparison (Windows emulat
     assert.equal(resolvesInPlugin(spelling, nested, winKeys), true,
       `lookup must resolve against Windows-shaped keys: ${spelling}`);
   }
-  // Non-vacuity: the same lookups against a deliberately un-normalised key set
-  // must fail, or this test would pass however the keys were built.
+  // Non-vacuity, with a backslash token on purpose. A slash token makes this pair
+  // decorative — the un-normalised key set misses either way, so it passes however
+  // the token was handled (measured: with the slash spelling, removing the token
+  // normalisation fails nothing). The backslash spelling discriminates.
+  //
+  // It is *dominated* in the current arrangement: the backslash lookup above fails
+  // first on the same mutation, so this line does not execute and adds no detection
+  // today. It is kept as a backstop, because the assertion that dominates it is an
+  // enumeration of spellings — and enumerations get trimmed. Neutralise the spelling
+  // above and remove the token normalisation, and this is what fails.
   const rawKeys = new Set([...winKeys].map((k) => k.split('/').join('\\')));
   // Backslash token on purpose. With a slash token this pair is decorative: the
   // un-normalised key set misses either way, so it passes however the token was
