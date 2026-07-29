@@ -667,7 +667,15 @@ const IGNORED_DIRS = (() => {
 // flagging it would be an over-flag. That is the shape a cross-repo sweep found here.
 //
 // `node_modules` is neither: it is not a leak and not an output root, just noise.
-const WORKSPACE_OUTPUT_DIRS = new Set(IGNORED_DIRS.filter((d) => d.startsWith('.deep-')));
+// A tool's per-project directory is not a leak either: `.claude` is Claude Code's,
+// `.vscode` and `.idea` are the editors'. None belongs to any plugin, all live in the
+// analysed project, and a document may correctly name one. This IS a small enumeration
+// and saying so is the point — its growth condition is known, and the alternative,
+// treating anything unproven as a workspace output, is fail-open.
+const HOST_PROJECT_DIRS = new Set(['.claude', '.vscode', '.idea']);
+
+const WORKSPACE_OUTPUT_DIRS = new Set(
+  IGNORED_DIRS.filter((d) => d.startsWith('.deep-') || HOST_PROJECT_DIRS.has(d)));
 const GITIGNORED_DIRS = IGNORED_DIRS
   .filter((d) => !WORKSPACE_OUTPUT_DIRS.has(d) && d !== 'node_modules');
 
@@ -698,7 +706,7 @@ test('the non-shipped directory list is derived from .gitignore, not guessed', (
   }
 });
 
-test('no undeclared path under a non-shipped directory is named', () => {
+test('no undeclared path under a maintainer-only directory is named', () => {
   // The generalisation of the caveat rule. Anything under a gitignored
   // directory is unresolvable in an installed plugin and therefore resolves
   // only against the workspace. Each one must be declared in NON_SHIPPED, which
