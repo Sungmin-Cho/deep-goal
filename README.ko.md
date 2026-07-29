@@ -112,7 +112,7 @@ Skill({ skill: "deep-goal:deep-goal", args: "<task>" })
 
 | 레시피 | 감지 조건 | 요지 |
 |---|---|---|
-| **robust-implementation** | deep-work + deep-review 감지 | Research→Plan→Implement→Test 단계 진행, Plan 승인 게이트 + deep-review-loop APPROVE 판정 + 테스트 통과를 종료조건으로 |
+| **robust-implementation** | deep-work + deep-review 감지 | Research→Plan→Implement→Test 단계 진행(risk class medium 이상이면 Spec 추가), 문서 승인 게이트 + deep-review-loop 수렴(APPROVE + Critical·Warning 0건) + 테스트 통과를 종료조건으로 |
 | **autonomous-evolution** | deep-evolve 감지 | 목표 fitness metric 도달 또는 상한까지 자율 실험 루프 |
 | **ship-and-document** | deep-docs + deep-wiki 감지 | 구현 완료 → (deep-review 있으면 리뷰 게이트 먼저) → docs 정비 → `/wiki-ingest`; 영속 작업은 리뷰 승인 이후 |
 

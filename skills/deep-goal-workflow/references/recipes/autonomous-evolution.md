@@ -55,8 +55,8 @@ deep-evolve의 자율 실험 루프를 fitness metric 목표치까지 반복 실
 ### Claude (fitness metric 표면화 포함)
 
 ```
-deep-evolve 루프로 <목표 시스템>의 <fitness metric>을 <목표치>까지 향상시킨다.
-매 이터레이션마다 측정한 <fitness metric> 값을 대화에 보고한다.
+deep-evolve 루프로 <목표 시스템>의 <fitness metric>을 <목표치>까지 향상시킨다. (목표치 기준 evaluator: <evaluator 식별자>)
+매 이터레이션마다 측정한 <fitness metric> 값을 대화에 보고한다. outer loop가 evaluator를 교체하면 교체 사실과 새 척도를 보고하고 목표치를 재확인한다.
 성공 종료조건: <fitness metric> ≥ <목표치>가 대화에 보고됨.
 정지 조건(성공 아님): 이터레이션 <N>회 cap 또는 turn 상한 소진 → "목표 미달 정지"로 명시 보고.
 불변 제약: <변경 금지 항목 — 예: 인터페이스 시그니처 유지, 기존 테스트 삭제 금지>.
@@ -88,7 +88,13 @@ or stop after 50 turns.
 
 ### deep-evolve 자체 루프와 goal 상한의 관계
 
-deep-evolve는 자체 루프를 가진다. goal의 `or stop after N turns` 상한이 deep-evolve의 예상 이터레이션보다 작으면 루프 중간에 goal이 종료될 수 있다. 이터레이션당 예상 턴 수를 추산해 여유 있게 상한을 설정한다.
+deep-evolve는 두 겹의 루프를 가진다 — 현재 strategy로 실험을 돌리는 **inner loop**와, epoch마다 개선 속도를 측정해 strategy를 변이시키는 **outer loop**. inner loop는 배정된 block size·목표 달성·예산 소진에서 멈추고 **예산을 스스로 늘리지 않는다**. goal의 `or stop after N turns` 상한이 예상 이터레이션보다 작으면 루프 중간에 goal이 종료되므로, 이터레이션당 예상 턴 수를 추산해 여유 있게 설정한다.
+
+### 목표치는 evaluator가 고정된 구간에서만 의미가 있다
+
+fitness metric은 **실험이 진행되는 동안** 고정된다. 그러나 outer loop의 Tier 3는 정체(plateau)가 감지되면 evaluator/config 전체를 교체하고 rebaseline한다. 즉 장기 goal에서는 조건이 겨냥한 `<목표치>`가 도중에 **다른 척도의 숫자**가 될 수 있다.
+
+따라서 컴파일된 조건은 (a) 목표치를 어느 evaluator 기준인지와 함께 적고, (b) evaluator가 교체되면 그 사실을 대화에 보고하고 목표치를 재확인하도록 지시한다. 그러지 않으면 평가자는 교체 이후의 값을 이전 척도의 달성으로 오판한다.
 
 ### fitness metric 정의 명확화
 

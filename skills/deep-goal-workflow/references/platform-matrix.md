@@ -49,41 +49,21 @@ Claude 평가자 제약 때문에 다음 규칙을 반드시 적용한다:
 or stop after 20 turns.
 ```
 
-### Claude 컴파일 예시 (레시피 기반, PLAN.md 분리)
+### 레시피 기반 조건은 여기서 예시를 만들지 않는다
 
-PLAN.md 내용:
-```markdown
-# Plan — robust-implementation
+레시피 기반 컴파일 예시는 **레시피 파일이 정본**이다 — Claude 형태와 Codex
+형태 모두 `<absolute-plugin-root>/skills/deep-goal-workflow/references/recipes/`
+아래 각 레시피의 §컴파일된 `/goal` 예시에 있다.
 
-## Phase 1: Research
-- 요구사항 분석, 기존 코드 파악
-- 완료 보고: "Research 완료 — 주요 발견: ..."
+여기에 같은 예시를 두 번째로 적으면 정본이 고쳐질 때 이쪽만 남는다. 실제로
+그렇게 됐다: 이 파일의 이전 예시는 Research·Spec 문서 승인, phase 경계
+Exit Gate, review 루프의 확인 질문, `x-test-verified` 검증을 모두 빠뜨린 채
+Plan 승인 하나만 담고 있었다. 레시피는 그 사이 전부 정정됐고, 이 파일만
+뒤처졌다. 컴파일 입력에서 게이트가 빠지면 goal은 예외를 던지지 않는다 —
+언급되지 않은 프롬프트 앞에 멈춘 채 상한을 태운다.
 
-## Phase 2: Plan (승인 게이트)
-- 구현 계획 작성
-- 사용자 승인 요청: "Plan을 검토해 주세요. 승인하시겠습니까?"
-- 승인이 대화에 보고된 뒤에만 Phase 3 진행
-
-## Phase 3: Implement
-- 계획에 따라 구현
-- 완료 보고: "Implement 완료"
-
-## Phase 3(Implement) 완료 직후: deep-review-loop(--max=3)
-- APPROVE까지 반복
-- 결과 보고: "review verdict: APPROVE"
-
-## Phase 4: Test
-- 전체 테스트 실행
-- 완료 보고: `npm test` 출력 그대로
-```
-
-조건:
-```
-PLAN.md 단계대로 완수. 각 게이트(Plan 승인·review verdict)를 대화에 보고한 뒤에만 다음 단계 진행.
-종료조건: 최종 deep-review-loop APPROVE AND `npm test` 전체 통과 AND 각 게이트 통과 보고 완료.
-or stop after <N> turns.
-(N을 구체 숫자로 치환 — 예: 40)
-```
+이 파일이 담는 것은 **호스트 차이**뿐이다(위의 Claude 분기 규칙, 아래의 Codex
+분기 규칙, 그리고 단발 조건 예시). 레시피의 내용은 담지 않는다.
 
 ---
 
@@ -105,16 +85,7 @@ Codex는 자체 판단으로 종료하므로 표면화 제약이 덜하지만, �
 [종료] 검증 통과 시 완료. 진행 중 각 단계 체크포인트 로그 남길 것.
 ```
 
-### Codex 컴파일 예시 (레시피 기반)
-
-```
-[달성] deep-work 세션으로 <기능>을 Research→Plan→Implement→Test 순으로 완수한다.
-[변경 금지] main 브랜치 직접 push 금지, 기존 API 시그니처 유지.
-[검증] `npm test` 전체 통과 AND deep-review-loop APPROVE.
-[종료] 검증 통과 시 완료.
-Plan 단계 완료 시 `pause`로 사용자 승인 요청. Implement 완료 직후 deep-review-loop(--max=3) 실행.
-진행 중 각 phase 체크포인트 로그 남길 것. PLAN.md 참조.
-```
+레시피 기반 Codex 예시도 마찬가지로 레시피 파일이 정본이다(위 참조).
 
 ---
 

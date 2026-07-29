@@ -6,11 +6,13 @@ deep-goal의 4단계(레시피 매칭)에서 사용한다. 감지된 deep-* 플�
 
 ## 레시피 목록
 
-| 레시피 | 파일 | 한 줄 설명 |
-|---|---|---|
-| **robust-implementation** | [robust-implementation.md](robust-implementation.md) | deep-work 4단계(Research→Plan→Implement→Test) + deep-review-loop APPROVE 게이트를 엮어 검증된 구현을 goal로 자율 진행 |
-| **autonomous-evolution** | [autonomous-evolution.md](autonomous-evolution.md) | deep-evolve의 실험 루프를 fitness metric 목표치까지 반복하는 자율 진화 goal |
-| **ship-and-document** | [ship-and-document.md](ship-and-document.md) | (review 게이트 선행 후) deep-docs garden + deep-wiki 반영으로 완성된 배포·문서화를 goal로 자율 진행 |
+| 레시피 | 한 줄 설명 |
+|---|---|
+| [**robust-implementation**](robust-implementation.md) | deep-work 게이트 phase(Research→Plan→Implement→Test, risk class medium 이상이면 Spec 추가)와 deep-review-loop 수렴(APPROVE + Critical·Warning 0건)을 엮어 검증된 구현을 진행 |
+| [**autonomous-evolution**](autonomous-evolution.md) | deep-evolve의 실험 루프를 fitness metric 목표치까지 반복하는 자율 진화 goal |
+| [**ship-and-document**](ship-and-document.md) | (review 수렴 선행 후) deep-docs garden + deep-wiki 반영으로 배포·문서화를 진행 |
+
+**사용자 입력이 필요한 지점**은 레시피마다 다르므로 선택 전에 고지한다. robust-implementation은 Research·Plan(진입 시 Spec) 문서 승인과 phase 경계 Exit Gate에서, ship-and-document는 review 확인과 garden의 항목별 적용 선택에서 각각 사용자 응답을 기다린다. autonomous-evolution의 deep-evolve inner loop만 블록 경계 사이에서 실제로 무인 실행된다.
 
 ---
 
@@ -44,5 +46,5 @@ deep-goal의 4단계(레시피 매칭)에서 사용한다. 감지된 deep-* 플�
 
 단발 goal 폴백:
 - 설치된 deep-* 플러그인 없이도 동작한다.
-- `references/condition-compiler.md`의 4요소와 평가자 표면화 규칙만으로 조건을 컴파일한다.
+- `<absolute-plugin-root>/skills/deep-goal-workflow/references/condition-compiler.md`의 4요소와 평가자 표면화 규칙만으로 조건을 컴파일한다.
 - 결과물: 단일 `/goal <조건>` 코드블록 + 활성화 안내.

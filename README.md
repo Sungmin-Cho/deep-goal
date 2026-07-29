@@ -112,7 +112,7 @@ its native `$deep-goal:deep-goal` entry and is not instructed to call Claude's `
 
 | Recipe | Triggers when | Summary |
 |---|---|---|
-| **robust-implementation** | deep-work + deep-review detected | Phase-by-phase implementation (Research→Plan→Implement→Test) with Plan approval gate, deep-review-loop APPROVE verdict, and test pass as termination |
+| **robust-implementation** | deep-work + deep-review detected | Phase-by-phase implementation (Research→Plan→Implement→Test, plus Spec when deep-work classes the task medium risk or higher) with document approval gates, deep-review-loop convergence (APPROVE with zero Critical and Warning issues), and test pass as termination |
 | **autonomous-evolution** | deep-evolve detected | Fitness-metric-driven experiment loop until target metric reached or turn limit hit |
 | **ship-and-document** | deep-docs + deep-wiki detected | Implementation → (review gate if deep-review present) → docs garden → `/wiki-ingest`; persistent operations after review approval |
 

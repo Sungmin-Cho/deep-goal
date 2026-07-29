@@ -7,6 +7,35 @@
 
 ---
 
+## [1.2.1] — 2026-07-28
+
+### 변경됨
+
+- `AGENTS.md`가 두 호스트 공용 단일 에이전트 가이드가 되고 `CLAUDE.md`는 이를 import한다. 항상 로드되는 가이드 분량이 절반 수준으로 줄었다.
+- 두 스킬의 본문과 description을 축약했다. 트리거 문구는 모두 그대로 보존했다.
+- 에이전트 가이드가 안내하는 버전 조회 명령을 `npm pkg get version`으로 바꿨다.
+
+### 제거됨
+
+- manifest와 `npm run verify`가 이미 정의하는 내용을 되풀이하던 검증·디렉터리 트리·릴리스 워크플로우 중복 섹션을 삭제했다.
+
+### 수정됨
+
+- `robust-implementation` 레시피가 deep-work session receipt의 존재만으로 검증된 세션 완료를 증명한다고 보았다. deep-work는 Test 실패 세션에서도 receipt를 emit하므로, 컴파일되는 조건이 receipt의 `x-test-verified: true`를 요구하고 receipt가 실제로 담고 있는 필드로 stale 여부를 판정하도록 고쳤다.
+- 레시피와 README가 deep-work의 Spec phase와 그것을 여는 risk class를 명시한다. Research→Plan→Implement→Test만 나열한 조건은 게이트가 걸린 phase를 건너뛰라고 지시했고, 반대로 Spec을 무조건 요구한 조건은 저위험 세션에서 영원히 충족되지 않았다.
+- `ship-and-document`은 여전히 review를 `wiki-ingest`보다 먼저 두지만 근거를 바로잡았다 — deep-wiki는 커밋을 journal로 감싸 중단된 ingest를 복구한다. 되돌릴 수 없는 것은 완료된 ingest다.
+- 사전 준비물 탐색 reference가 누락했던 `npm test` 폴백을 포함해 모든 unconfirmed 증명 커맨드 추정을 기술한다.
+- 레시피가 형제 플러그인이 제공하지 않는 무인 실행을 약속하지 않는다. deep-work는 Plan뿐 아니라 Research 완료 후에도(Spec에 진입한 세션이면 Spec 완료 후에도) 문서 승인을 요구하고, review 루프는 privacy·mutation 소유권·DEFER 질문을 계속 띄우며, `deep-docs garden`은 편집 전에 항목마다 묻는다. 컴파일된 조건이 이 지점들을 pause로 명시한다.
+- 라운드 상한에 도달해 멈춘 review 루프를 컴파일된 종료조건에서 수렴으로 치지 않는다. 수렴은 APPROVE + Critical·Warning 0건이다.
+- autonomous-evolution 조건이 목표치를 특정 evaluator에 고정하고, outer loop가 evaluator를 교체하면 보고하도록 요구한다. 장기 실행이 다른 척도를 조용히 측정하는 일을 막는다.
+
+### 보안
+
+- 스킬이 열거나 실행하라고 지시하는 모든 플러그인 파일 경로를 설치된 plugin root에 anchor했다. 분석 대상 저장소가 동명 파일로 deep-goal 문서나 스크립트를 shadowing할 수 없다. reference-integrity 테스트가 이 규칙을 강제하며 bare 경로가 있으면 빌드가 실패한다.
+- 플러그인 안에 존재하지 않는 경로를 가리켜 분석 대상 프로젝트 쪽으로 해석되던 workflow 상호 참조를 수정했다.
+
+---
+
 ## [1.2.0] — 2026-07-11
 
 ### 추가됨
