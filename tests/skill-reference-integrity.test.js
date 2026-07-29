@@ -647,7 +647,7 @@ test('a path the plugin never ships carries the sentence that makes it safe', ()
 // Derived from `.gitignore`, not hand-listed. A hand-listed pair matched the
 // ignore file exactly on the day it was written and would have leaked silently
 // the first time a third entry was added.
-const GITIGNORED_DIRS = (() => {
+const IGNORED_DIRS = (() => {
   const body = readFileSync(join(ROOT, '.gitignore'), 'utf8');
   return body.split('\n')
     .map((line) => line.trim())
@@ -655,13 +655,46 @@ const GITIGNORED_DIRS = (() => {
     .map((line) => line.replace(/\/$/, ''));
 })();
 
+// Not every gitignored directory is a leak when a document names it. The rule's
+// premise is "this can only ever resolve against the analysed project, so naming it
+// hands the instruction there" — and for a plugin's declared output root, resolving
+// against the analysed project is the CONTRACT.
+//
+// `.deep-*` is the suite's naming convention for those roots, so the split asks the
+// convention rather than guessing. It deliberately covers SIBLING roots too: this
+// repo never writes `.deep-review/`, but a document telling an agent to read a
+// sibling's report there is making a correct workspace-relative reference, and
+// flagging it would be an over-flag. That is the shape a cross-repo sweep found here.
+//
+// `node_modules` is neither: it is not a leak and not an output root, just noise.
+const WORKSPACE_OUTPUT_DIRS = new Set(IGNORED_DIRS.filter((d) => d.startsWith('.deep-')));
+const GITIGNORED_DIRS = IGNORED_DIRS
+  .filter((d) => !WORKSPACE_OUTPUT_DIRS.has(d) && d !== 'node_modules');
+
+test('the workspace-output split is derived from the convention, and is two-way', () => {
+  // The split is the one place this rule can be turned off, so it is asserted in both
+  // directions rather than only where it happens to matter today.
+  assert.ok(WORKSPACE_OUTPUT_DIRS.has('.deep-review'),
+    'a sibling output root must be classed as a workspace output — naming it is correct');
+  assert.ok(GITIGNORED_DIRS.includes('docs'),
+    'docs must stay maintainer-only — it is where the blind spot was found');
+  for (const dir of GITIGNORED_DIRS) {
+    assert.ok(!dir.startsWith('.deep-'), `${dir} looks like an output root but is swept`);
+  }
+  assert.ok(GITIGNORED_DIRS.length > 0, 'the split must not empty the rule — that silences it');
+  assert.ok(GITIGNORED_DIRS.length < IGNORED_DIRS.length,
+    'nothing was split off — then the rule is unchanged, which is not what its comment claims');
+});
+
 test('the non-shipped directory list is derived from .gitignore, not guessed', () => {
   // Non-vacuity: the sweep below is only meaningful if this actually found the
   // directories that motivated it.
-  assert.ok(GITIGNORED_DIRS.length > 0, '.gitignore yielded no ignored directories');
+  // Asserted against the RAW derivation: the workspace-output split runs after it and
+  // has its own test, so `.deep-review` legitimately leaves the swept set.
+  assert.ok(IGNORED_DIRS.length > 0, '.gitignore yielded no ignored directories');
   for (const dir of ['docs', '.deep-review']) {
-    assert.ok(GITIGNORED_DIRS.includes(dir),
-      `${dir} must be recognised as non-shipped — it is where the blind spot was found`);
+    assert.ok(IGNORED_DIRS.includes(dir),
+      `${dir} must be found by the derivation — it is where the blind spot was found`);
   }
 });
 
