@@ -971,6 +971,14 @@ test('normalisation is applied to both sides of every comparison (Windows emulat
   // own result first. Nothing else can see this: on POSIX `relative()` already
   // returns slashes, so removing the normalisation is a no-op.
   const winRel = (from, to) => relative(from, to).split('/').join('\\');
+  // This pin is vacuous unless the DIRECT branch misses. `resolvesInPlugin`
+  // strips the leading `./` and looks the bare basename up first; if a file of
+  // that name sits at the repo root it returns there and the source-relative
+  // branch — the thing being pinned — never runs, while the assertion still sees
+  // `true`. Deriving the target from the shipped set protects against the target
+  // MOVING, which fails loudly; it does nothing about this, which fails silently.
+  assert.equal(winKeys.has('fitness-rubric.md'), false,
+    'a root-level file of this basename would make the next assertion vacuous');
   assert.equal(
     resolvesInPlugin('./fitness-rubric.md',
       join(ROOT, 'skills', 'deep-goal-workflow', 'references', 'x.md'), winKeys, winRel),
