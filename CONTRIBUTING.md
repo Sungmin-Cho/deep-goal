@@ -1,7 +1,7 @@
 # Contributing to deep-goal
 
 Thanks for improving **deep-goal**, the goal condition compiler for the
-[Deep Suite](https://github.com/Sungmin-Cho/claude-deep-suite) plugin family across Claude Code and
+[Deep Suite](https://github.com/Sungmin-Cho/deep-suite) plugin family across Claude Code and
 Codex.
 
 deep-goal is content-only: it ships no `hooks/`, no `agents/`, no `.mcp.json`, and no MCP server.
@@ -17,8 +17,8 @@ Keep it a one-shot compiler with no persistent runtime state.
 ## Getting started
 
 ```text
-git clone https://github.com/Sungmin-Cho/claude-deep-goal.git
-cd claude-deep-goal
+git clone https://github.com/Sungmin-Cho/deep-goal.git
+cd deep-goal
 ```
 
 There are no package dependencies to install. The verification surface uses Node built-ins.

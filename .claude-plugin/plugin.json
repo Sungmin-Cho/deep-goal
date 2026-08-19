@@ -3,7 +3,7 @@
   "version": "1.2.1",
   "description": "Goal condition compiler for Claude Code and Codex — reshapes long-running requests, scouts prerequisites, and compiles native /goal conditions",
   "author": { "name": "Sungmin-Cho" },
-  "repository": "https://github.com/Sungmin-Cho/claude-deep-goal.git",
+  "repository": "https://github.com/Sungmin-Cho/deep-goal.git",
   "license": "MIT",
   "category": "Productivity",
   "keywords": ["goal", "long-running", "autonomous", "orchestration", "harness"]

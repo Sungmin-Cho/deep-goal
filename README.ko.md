@@ -2,13 +2,13 @@
 
 # deep-goal
 
-![version](https://img.shields.io/github/package-json/v/Sungmin-Cho/claude-deep-goal?label=version)
-![license](https://img.shields.io/github/license/Sungmin-Cho/claude-deep-goal)
-[![part of deep-suite](https://img.shields.io/badge/part%20of-deep--suite-5b8def)](https://github.com/Sungmin-Cho/claude-deep-suite)
+![version](https://img.shields.io/github/package-json/v/Sungmin-Cho/deep-goal?label=version)
+![license](https://img.shields.io/github/license/Sungmin-Cho/deep-goal)
+[![part of deep-suite](https://img.shields.io/badge/part%20of-deep--suite-5b8def)](https://github.com/Sungmin-Cho/deep-suite)
 
 Goal 조건 컴파일러 — 장기 작업 요청을 평가하고, 형태를 다듬고, 사전 준비물을 탐색해, Claude Code와 Codex의 네이티브 `/goal`에 그대로 붙여 넣을 수 있는 완성된 조건을 컴파일해 제시합니다.
 
-[deep-suite](https://github.com/Sungmin-Cho/claude-deep-suite) 에코시스템의 일원으로, 요청을 실행 가능한 `/goal`로 바꿔 주는 "오케스트레이션 진입로"입니다. 릴리스 이력은 [CHANGELOG](CHANGELOG.md)를 참고하세요.
+[deep-suite](https://github.com/Sungmin-Cho/deep-suite) 에코시스템의 일원으로, 요청을 실행 가능한 `/goal`로 바꿔 주는 "오케스트레이션 진입로"입니다. 릴리스 이력은 [CHANGELOG](CHANGELOG.md)를 참고하세요.
 
 ---
 
@@ -28,7 +28,7 @@ deep-goal은 요청을 평가하고, 필요하면 재구성하고, 컴파일된 
 
 ```text
 # Claude Code
-claude plugin add https://github.com/Sungmin-Cho/claude-deep-goal.git
+claude plugin add https://github.com/Sungmin-Cho/deep-goal.git
 
 # Codex — Codex 설정에서 로컬 경로를 plugin 디렉토리로 추가
 ```
@@ -42,7 +42,7 @@ clone 즉시 동작합니다. 마켓플레이스 등록 여부와 무관합니�
 등록 완료 후:
 ```text
 # 1단계 — deep-suite 마켓플레이스 소스 추가 (미추가 시)
-/plugin marketplace add Sungmin-Cho/claude-deep-suite
+/plugin marketplace add Sungmin-Cho/deep-suite
 
 # 2단계 — 마켓플레이스에서 deep-goal 설치
 # Claude Code
@@ -136,13 +136,13 @@ Claude용 조건에는 항상 "각 단계 결과를 대화에 명시적으로 �
 
 | 플러그인 | 역할 |
 |---|---|
-| [deep-goal](https://github.com/Sungmin-Cho/claude-deep-goal) | 이 플러그인 — goal 조건 컴파일러 (메타-Guide) |
-| [deep-work](https://github.com/Sungmin-Cho/claude-deep-work) | 단계별 구현 오케스트레이터 |
-| [deep-review](https://github.com/Sungmin-Cho/claude-deep-review) | APPROVE 판정 코드 리뷰 루프 |
-| [deep-evolve](https://github.com/Sungmin-Cho/claude-deep-evolve) | 자율 fitness metric 실험 루프 |
-| [deep-docs](https://github.com/Sungmin-Cho/claude-deep-docs) | 문서 정비 에이전트 |
-| [deep-wiki](https://github.com/Sungmin-Cho/claude-deep-wiki) | 지식 베이스 수집·관리 |
-| [deep-suite (마켓플레이스)](https://github.com/Sungmin-Cho/claude-deep-suite) | 통합 마켓플레이스 및 Harness 매트릭스 |
+| [deep-goal](https://github.com/Sungmin-Cho/deep-goal) | 이 플러그인 — goal 조건 컴파일러 (메타-Guide) |
+| [deep-work](https://github.com/Sungmin-Cho/deep-work) | 단계별 구현 오케스트레이터 |
+| [deep-review](https://github.com/Sungmin-Cho/deep-review) | APPROVE 판정 코드 리뷰 루프 |
+| [deep-evolve](https://github.com/Sungmin-Cho/deep-evolve) | 자율 fitness metric 실험 루프 |
+| [deep-docs](https://github.com/Sungmin-Cho/deep-docs) | 문서 정비 에이전트 |
+| [deep-wiki](https://github.com/Sungmin-Cho/deep-wiki) | 지식 베이스 수집·관리 |
+| [deep-suite (마켓플레이스)](https://github.com/Sungmin-Cho/deep-suite) | 통합 마켓플레이스 및 Harness 매트릭스 |
 
 ---
 
