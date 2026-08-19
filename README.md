@@ -2,13 +2,13 @@
 
 # deep-goal
 
-![version](https://img.shields.io/github/package-json/v/Sungmin-Cho/claude-deep-goal?label=version)
-![license](https://img.shields.io/github/license/Sungmin-Cho/claude-deep-goal)
-[![part of deep-suite](https://img.shields.io/badge/part%20of-deep--suite-5b8def)](https://github.com/Sungmin-Cho/claude-deep-suite)
+![version](https://img.shields.io/github/package-json/v/Sungmin-Cho/deep-goal?label=version)
+![license](https://img.shields.io/github/license/Sungmin-Cho/deep-goal)
+[![part of deep-suite](https://img.shields.io/badge/part%20of-deep--suite-5b8def)](https://github.com/Sungmin-Cho/deep-suite)
 
 Goal condition compiler — evaluates long-running task requests, reshapes them to fit, scouts prerequisites, and compiles ready-to-paste native `/goal` conditions for Claude Code and Codex.
 
-Part of the [deep-suite](https://github.com/Sungmin-Cho/claude-deep-suite) ecosystem — the "orchestration on-ramp" that turns a request into a ready-to-run `/goal`. See the [CHANGELOG](CHANGELOG.md) for release history.
+Part of the [deep-suite](https://github.com/Sungmin-Cho/deep-suite) ecosystem — the "orchestration on-ramp" that turns a request into a ready-to-run `/goal`. See the [CHANGELOG](CHANGELOG.md) for release history.
 
 ---
 
@@ -28,8 +28,8 @@ This is by design: the native `/goal` UI, evaluator, session-resume, and auto-cl
 
 ```text
 # Claude Code
-git clone https://github.com/Sungmin-Cho/claude-deep-goal.git
-claude plugin add https://github.com/Sungmin-Cho/claude-deep-goal.git
+git clone https://github.com/Sungmin-Cho/deep-goal.git
+claude plugin add https://github.com/Sungmin-Cho/deep-goal.git
 
 # Codex — add the local path as a plugin directory in your Codex config
 ```
@@ -43,7 +43,7 @@ This path works from the moment you clone. No marketplace registration dependenc
 Once registered:
 ```text
 # Step 1 — add the deep-suite marketplace source (if not already added)
-/plugin marketplace add Sungmin-Cho/claude-deep-suite
+/plugin marketplace add Sungmin-Cho/deep-suite
 
 # Step 2 — install deep-goal from the marketplace
 # Claude Code
@@ -136,13 +136,13 @@ For Claude: compiled conditions always include "report each step result explicit
 
 | Plugin | Role |
 |---|---|
-| [deep-goal](https://github.com/Sungmin-Cho/claude-deep-goal) | This plugin — goal condition compiler (meta-Guide) |
-| [deep-work](https://github.com/Sungmin-Cho/claude-deep-work) | Phased implementation orchestrator |
-| [deep-review](https://github.com/Sungmin-Cho/claude-deep-review) | Code review loop with APPROVE verdict |
-| [deep-evolve](https://github.com/Sungmin-Cho/claude-deep-evolve) | Autonomous fitness-metric experiment loop |
-| [deep-docs](https://github.com/Sungmin-Cho/claude-deep-docs) | Document gardening agent |
-| [deep-wiki](https://github.com/Sungmin-Cho/claude-deep-wiki) | Knowledge base ingest and management |
-| [deep-suite (marketplace)](https://github.com/Sungmin-Cho/claude-deep-suite) | Unified marketplace and harness matrix |
+| [deep-goal](https://github.com/Sungmin-Cho/deep-goal) | This plugin — goal condition compiler (meta-Guide) |
+| [deep-work](https://github.com/Sungmin-Cho/deep-work) | Phased implementation orchestrator |
+| [deep-review](https://github.com/Sungmin-Cho/deep-review) | Code review loop with APPROVE verdict |
+| [deep-evolve](https://github.com/Sungmin-Cho/deep-evolve) | Autonomous fitness-metric experiment loop |
+| [deep-docs](https://github.com/Sungmin-Cho/deep-docs) | Document gardening agent |
+| [deep-wiki](https://github.com/Sungmin-Cho/deep-wiki) | Knowledge base ingest and management |
+| [deep-suite (marketplace)](https://github.com/Sungmin-Cho/deep-suite) | Unified marketplace and harness matrix |
 
 ---
 
